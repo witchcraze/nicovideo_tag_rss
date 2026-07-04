@@ -19,19 +19,19 @@ listen: ":8080"
 update_interval: 5m
 
 feeds:
-  - name: paula
-    title: パウラ動画
-    description: パウラ関連動画
+  - name: vocaloid
+    title: VOCALOID動画
+    description: VOCALOID関連動画
     tags:
-      - パウラ
+      - 初音ミク
 
-  - name: vtuber
-    title: VTuber
-    description: VTuberまとめ
+  - name: music
+    title: 音楽まとめ
+    description: 歌・演奏動画まとめ
     tags:
-      - パウラ
-      - 結月ゆかり
-      - VOICEROID実況
+      - 初音ミク
+      - 歌ってみた
+      - 演奏してみた
 ```
 
 ## API 仕様
