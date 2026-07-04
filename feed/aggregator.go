@@ -2,6 +2,9 @@ package feed
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
 	"log/slog"
 	"sort"
 	"time"
@@ -55,9 +58,20 @@ func (a *Aggregator) Update(ctx context.Context, feedName string, cfg config.Fee
 		return mergedVideos[i].PubDate.After(mergedVideos[j].PubDate)
 	})
 
+	rssXML, err := GenerateRSS(cfg, mergedVideos)
+	if err != nil {
+		slog.Error("failed to generate RSS", "feed", feedName, "error", err)
+		return err
+	}
+
+	hash := sha256.Sum256(rssXML)
+	eTag := fmt.Sprintf(`W/"%s"`, hex.EncodeToString(hash[:]))
+
 	a.cache.Set(feedName, &CachedFeed{
 		Videos:      mergedVideos,
+		RSSXML:      rssXML,
 		LastUpdated: time.Now(),
+		ETag:        eTag,
 	})
 
 	return nil
