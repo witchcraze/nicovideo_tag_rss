@@ -10,39 +10,106 @@
 - **構造化ログ**: `log/slog` を用いた構造化ログを出力し、運用の監視を容易にします。
 - **Docker対応**: Dockerイメージとしてパッケージ化され、GitHub Container Registry等で容易にデプロイ可能です。
 
-## 設定仕様
+## 使い方 (Usage)
 
-設定は YAML ファイルで行います。
+### 1. 設定ファイルの作成
+
+`config.yaml` を作成し、配信したいフィードと対象のタグを設定します。
 
 ```yaml
 listen: ":8080"
-update_interval: 5m
+update_interval: 15m
 
 feeds:
-  - name: vocaloid
-    title: VOCALOID動画
-    description: VOCALOID関連動画
+  - name: "vocaloid"
+    title: "VOCALOID Latest"
+    description: "Latest VOCALOID videos from Nicovideo"
     tags:
-      - 初音ミク
+      - "VOCALOID"
+      - "初音ミク"
 
-  - name: music
-    title: 音楽まとめ
-    description: 歌・演奏動画まとめ
+  - name: "game_commentary"
+    title: "Game Commentary"
+    description: "Latest game commentary videos"
     tags:
-      - 初音ミク
-      - 歌ってみた
-      - 演奏してみた
+      - "ゲーム実況"
 ```
+
+- `listen`: サーバーがリッスンするアドレス（デフォルト `":8080"`）
+- `update_interval`: ニコニコ動画へタグ検索情報を取得しに行く間隔（デフォルト `5m`）
+- `feeds`: 生成するRSSフィードのリスト。`name` がURLパス（例: `/feed/vocaloid`）になります。
+
+### 2. Docker Compose (Nginxリバースプロキシ付き) での起動
+
+GHCRに公開されているイメージと、リバースプロキシとしてのNginxを連携させる `docker-compose.yml` の例です。
+
+```yaml
+services:
+  app:
+    image: ghcr.io/witchcraze/nicovideo_tag_rss:latest
+    container_name: nicovideo_rss_app
+    restart: always
+    volumes:
+      # 手元で作成した config.yaml をコンテナの /app/config.yaml にマウント
+      - ./config.yaml:/app/config.yaml:ro
+    # 外部には公開せず、nginx経由でのみアクセスさせる
+
+  nginx:
+    image: nginx:alpine
+    container_name: nicovideo_rss_nginx
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - app
+```
+
+同じディレクトリに `nginx.conf` を作成します。
+
+```nginx
+server {
+    listen 80;
+    server_name localhost;
+
+    location / {
+        proxy_pass http://app:8080;
+        
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+これらのファイルを配置したディレクトリで以下のコマンドを実行します。
+
+```bash
+docker compose up -d
+```
+
+起動後、ブラウザで `http://localhost/` にアクセスすると、設定したフィードの一覧が表示されます。
+各フィードのRSSは `http://localhost/feed/{name}` で取得できます。
 
 ## API 仕様
 
 - `GET /`
-  - 登録されているFeedの一覧をHTMLまたはJSONで返します。
+  - 登録されているFeedの一覧をHTML形式で返します。
 - `GET /feed/{name}`
-  - 指定された `name` のRSSフィード（RSS 2.0形式）を返します。
+  - 指定された `name` のRSSフィード（RSS 2.0形式）を返します。ETagによる `304 Not Modified` に対応しています。
   - キャッシュされたデータを返すため高速かつ安定しています。
 - `GET /healthz`
-  - ヘルスチェック用エンドポイントです。
+  - ヘルスチェック用エンドポイント（200 OK）です。
+
+## 開発 (Development)
+
+ローカルで実行する場合は、Go 1.26以上がインストールされた環境で以下を実行します。
+
+```bash
+go run main.go -config config.example.yaml
+```
 
 ## ライセンス
 
