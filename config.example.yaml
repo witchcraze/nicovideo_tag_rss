@@ -1,0 +1,14 @@
+listen: ":8080"
+update_interval: 15m
+feeds:
+  - name: "vocaloid"
+    title: "VOCALOID Latest"
+    description: "Latest VOCALOID videos from Nicovideo"
+    tags:
+      - "VOCALOID"
+      - "初音ミク"
+  - name: "game_commentary"
+    title: "Game Commentary"
+    description: "Latest game commentary videos"
+    tags:
+      - "ゲーム実況"
