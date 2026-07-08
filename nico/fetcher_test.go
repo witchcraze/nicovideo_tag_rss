@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -80,6 +81,41 @@ func TestNicoFetcher_FetchByTag(t *testing.T) {
 	if len(videos) == 0 {
 		t.Fatal("expected videos to be fetched, got 0")
 	}
+}
+
+// MockPaginationRoundTripper simulates paginated responses
+type MockPaginationRoundTripper struct {
+	callCount  int
+	statusCode int
+}
+
+func (m *MockPaginationRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	m.callCount++
+	
+	// Extract page number from query
+	page := req.URL.Query().Get("page")
+	if page == "" {
+		page = "1"
+	}
+	
+	// Return different HTML based on page number (simplified mock)
+	var body string
+	switch page {
+	case "1":
+		body = `<meta name="server-response" content="{&quot;data&quot;:{&quot;response&quot;:{&quot;$getSearchVideoV2&quot;:{&quot;data&quot;:{&quot;items&quot;:[{&quot;id&quot;:&quot;sm1&quot;,&quot;title&quot;:&quot;Video1&quot;,&quot;registeredAt&quot;:&quot;2026-01-01T00:00:00+09:00&quot;,&quot;shortDescription&quot;:&quot;desc1&quot;,&quot;thumbnail&quot;:{&quot;url&quot;:&quot;http://thumb1.jpg&quot;},&quot;owner&quot;:{&quot;name&quot;:&quot;author1&quot;}}]}}}}}"/>`
+	case "2":
+		body = `<meta name="server-response" content="{&quot;data&quot;:{&quot;response&quot;:{&quot;$getSearchVideoV2&quot;:{&quot;data&quot;:{&quot;items&quot;:[{&quot;id&quot;:&quot;sm2&quot;,&quot;title&quot;:&quot;Video2&quot;,&quot;registeredAt&quot;:&quot;2026-01-01T00:00:00+09:00&quot;,&quot;shortDescription&quot;:&quot;desc2&quot;,&quot;thumbnail&quot;:{&quot;url&quot;:&quot;http://thumb2.jpg&quot;},&quot;owner&quot;:{&quot;name&quot;:&quot;author2&quot;}}]}}}}}"/>`
+	case "3":
+		body = `<meta name="server-response" content="{&quot;data&quot;:{&quot;response&quot;:{&quot;$getSearchVideoV2&quot;:{&quot;data&quot;:{&quot;items&quot;:[{&quot;id&quot;:&quot;sm3&quot;,&quot;title&quot;:&quot;Video3&quot;,&quot;registeredAt&quot;:&quot;2026-01-01T00:00:00+09:00&quot;,&quot;shortDescription&quot;:&quot;desc3&quot;,&quot;thumbnail&quot;:{&quot;url&quot;:&quot;http://thumb3.jpg&quot;},&quot;owner&quot;:{&quot;name&quot;:&quot;author3&quot;}}]}}}}}"/>`
+	default:
+		// Empty result for pages beyond 3
+		body = `<meta name="server-response" content="{&quot;data&quot;:{&quot;response&quot;:{&quot;$getSearchVideoV2&quot;:{&quot;data&quot;:{&quot;items&quot;:[]}}}}}"/>`
+	}
+	
+	return &http.Response{
+		StatusCode: 200,
+		Body:       io.NopCloser(strings.NewReader(body)),
+	}, nil
 }
 
 // MockRoundTripper for testing retry logic
@@ -221,5 +257,77 @@ func TestRetryableClient_MinimumInterval(t *testing.T) {
 	// The second request should have waited at least 1 second
 	if elapsed2 < 1*time.Second {
 		t.Errorf("expected at least 1 second delay before second request, got %v", elapsed2)
+	}
+}
+
+func TestFetchByTag_SinglePage(t *testing.T) {
+	mock := &MockPaginationRoundTripper{}
+	client := &http.Client{Transport: mock}
+	fetcher := &htmlFetcher{
+		client: NewRetryableClient(client),
+	}
+	fetcher.maxPages = 1
+	
+	videos, err := fetcher.FetchByTag(context.Background(), "test")
+	if err != nil {
+		t.Fatalf("FetchByTag failed: %v", err)
+	}
+	
+	// Should fetch only page 1
+	if len(videos) != 1 {
+		t.Errorf("expected 1 video, got %d", len(videos))
+	}
+	if videos[0].ID != "sm1" {
+		t.Errorf("expected first video ID 'sm1', got '%s'", videos[0].ID)
+	}
+	if mock.callCount != 1 {
+		t.Errorf("expected 1 HTTP call, got %d", mock.callCount)
+	}
+}
+
+func TestFetchByTag_MultiplePages(t *testing.T) {
+	mock := &MockPaginationRoundTripper{}
+	client := &http.Client{Transport: mock}
+	fetcher := &htmlFetcher{
+		client: NewRetryableClient(client),
+	}
+	fetcher.maxPages = 3
+	
+	videos, err := fetcher.FetchByTag(context.Background(), "test")
+	if err != nil {
+		t.Fatalf("FetchByTag failed: %v", err)
+	}
+	
+	// Should fetch 3 pages = 3 videos
+	if len(videos) != 3 {
+		t.Errorf("expected 3 videos, got %d", len(videos))
+	}
+	if videos[0].ID != "sm1" || videos[1].ID != "sm2" || videos[2].ID != "sm3" {
+		t.Errorf("unexpected video IDs after pagination")
+	}
+	if mock.callCount != 3 {
+		t.Errorf("expected 3 HTTP calls, got %d", mock.callCount)
+	}
+}
+
+func TestFetchByTag_DefaultSinglePage(t *testing.T) {
+	mock := &MockPaginationRoundTripper{}
+	client := &http.Client{Transport: mock}
+	fetcher := &htmlFetcher{
+		client: NewRetryableClient(client),
+	}
+	// maxPages not set, should default to 1
+	
+	videos, err := fetcher.FetchByTag(context.Background(), "test")
+	if err != nil {
+		t.Fatalf("FetchByTag failed: %v", err)
+	}
+	
+	// Should fetch only page 1 by default
+	if len(videos) != 1 {
+		t.Errorf("expected 1 video (default 1 page), got %d", len(videos))
+	}
+	if mock.callCount != 1 {
+		t.Errorf("expected 1 HTTP call, got %d", mock.callCount)
 	}
 }

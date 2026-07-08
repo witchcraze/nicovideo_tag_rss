@@ -102,7 +102,8 @@ type VideoFetcher interface {
 
 // htmlFetcher implements VideoFetcher by scraping the HTML search page.
 type htmlFetcher struct {
-	client *RetryableClient
+	client   *RetryableClient
+	maxPages int // Maximum number of pages to fetch (default: 1)
 }
 
 // NewHTMLFetcher creates a new HTML-based VideoFetcher.
@@ -111,13 +112,47 @@ func NewHTMLFetcher() *htmlFetcher {
 		Timeout: 10 * time.Second,
 	}
 	return &htmlFetcher{
-		client: NewRetryableClient(baseClient),
+		client:   NewRetryableClient(baseClient),
+		maxPages: 1,
 	}
 }
 
-// FetchByTag fetches videos for a given tag.
+// SetMaxPages sets the maximum number of pages to fetch
+func (f *htmlFetcher) SetMaxPages(maxPages int) {
+	if maxPages < 1 {
+		maxPages = 1
+	}
+	f.maxPages = maxPages
+}
+
+// FetchByTag fetches videos for a given tag across multiple pages.
 func (f *htmlFetcher) FetchByTag(ctx context.Context, tag string) ([]Video, error) {
-	reqURL := fmt.Sprintf("https://www.nicovideo.jp/tag/%s?sort=registeredAt&order=desc", url.QueryEscape(tag))
+	var allVideos []Video
+	maxPages := f.maxPages
+	if maxPages < 1 {
+		maxPages = 1
+	}
+
+	for page := 1; page <= maxPages; page++ {
+		videos, err := f.fetchPage(ctx, tag, page)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch page %d: %w", page, err)
+		}
+
+		if len(videos) == 0 {
+			// Stop if no more videos on this page
+			break
+		}
+
+		allVideos = append(allVideos, videos...)
+	}
+
+	return allVideos, nil
+}
+
+// fetchPage fetches videos from a specific page.
+func (f *htmlFetcher) fetchPage(ctx context.Context, tag string, page int) ([]Video, error) {
+	reqURL := fmt.Sprintf("https://www.nicovideo.jp/tag/%s?sort=registeredAt&order=desc&page=%d", url.QueryEscape(tag), page)
 	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)

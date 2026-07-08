@@ -14,6 +14,7 @@ type Config struct {
 	UpdateInterval      time.Duration `yaml:"update_interval"`
 	CacheDir            string        `yaml:"cache_dir"`
 	VideoRetentionDays  int           `yaml:"video_retention_days"`
+	MaxPages            int           `yaml:"max_pages"`
 	Feeds               []FeedConfig  `yaml:"feeds"`
 }
 
@@ -49,6 +50,9 @@ func LoadConfig(filename string) (*Config, error) {
 	}
 	if cfg.VideoRetentionDays <= 0 {
 		cfg.VideoRetentionDays = 7
+	}
+	if cfg.MaxPages <= 0 {
+		cfg.MaxPages = 1
 	}
 
 	// Validate
