@@ -24,8 +24,20 @@ jobs:
       - name: Build
         run: go build -v ./...
 
-      - name: Test
-        run: go test -v ./...
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Test (with race detector)
+        run: go test -v -race ./...
+
+      - name: Check gofmt
+        run: |
+          unformatted=$(gofmt -l . || true)
+          if [ -n "$unformatted" ]; then
+            echo "gofmt found unformatted files:"
+            echo "$unformatted"
+            exit 1
+          fi
 
   build-and-push-image:
     needs: test
