@@ -43,7 +43,8 @@ feeds:
 	if cfg.Listen != ":8080" {
 		t.Errorf("expected Listen to be ':8080', got '%s'", cfg.Listen)
 	}
-	expectedInterval := 5 * time.Minute
+	// The configured value 5m is below the enforced minimum (60m), so expect 60m
+	expectedInterval := 60 * time.Minute
 	if cfg.UpdateInterval != expectedInterval {
 		t.Errorf("expected UpdateInterval to be %v, got %v", expectedInterval, cfg.UpdateInterval)
 	}
