@@ -12,6 +12,78 @@ import (
 	"github.com/PuerkitoBio/goquery"
 )
 
+// RetryableClient wraps an HTTP client with retry logic using exponential backoff
+type RetryableClient struct {
+	client          *http.Client
+	maxRetries      int           // Maximum number of retries (total attempts = maxRetries + 1)
+	minInterval     time.Duration // Minimum interval between requests
+	initialBackoff  time.Duration // Initial backoff duration
+	lastRequestTime time.Time
+}
+
+// NewRetryableClient creates a new RetryableClient with default settings
+func NewRetryableClient(client *http.Client) *RetryableClient {
+	return &RetryableClient{
+		client:         client,
+		maxRetries:     4,                // 4 retries = 5 total attempts
+		minInterval:    1 * time.Second,  // Minimum 1 second between requests
+		initialBackoff: 1 * time.Second,  // Start with 1 second backoff
+	}
+}
+
+// isRetryable determines if an error should trigger a retry
+func (r *RetryableClient) isRetryable(resp *http.Response, err error) bool {
+	if err != nil {
+		// Network errors are retryable
+		return true
+	}
+	// Retry on server errors (5xx)
+	return resp.StatusCode >= 500 && resp.StatusCode < 600
+}
+
+// Do executes the request with retry logic
+func (r *RetryableClient) Do(ctx context.Context, req *http.Request) (*http.Response, error) {
+	var lastErr error
+	backoff := r.initialBackoff
+
+	for attempt := 0; attempt <= r.maxRetries; attempt++ {
+		// Apply minimum interval between requests (rate limiting)
+		if !r.lastRequestTime.IsZero() {
+			timeSinceLastRequest := time.Since(r.lastRequestTime)
+			if timeSinceLastRequest < r.minInterval {
+				waitTime := r.minInterval - timeSinceLastRequest
+				time.Sleep(waitTime)
+			}
+		}
+
+		r.lastRequestTime = time.Now()
+
+		// Execute request
+		resp, err := r.client.Do(req)
+
+		if err == nil && !r.isRetryable(resp, err) {
+			// Success or non-retryable error
+			return resp, nil
+		}
+
+		lastErr = err
+
+		// If this was the last attempt, return the error
+		if attempt == r.maxRetries {
+			if resp != nil {
+				return resp, fmt.Errorf("max retries exceeded: status %d", resp.StatusCode)
+			}
+			return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
+		}
+
+		// Wait before retrying (exponential backoff)
+		time.Sleep(backoff)
+		backoff *= 2 // Double the backoff for next iteration
+	}
+
+	return nil, lastErr
+}
+
 // Video represents a parsed video from Nicovideo.
 type Video struct {
 	ID          string
@@ -30,15 +102,16 @@ type VideoFetcher interface {
 
 // htmlFetcher implements VideoFetcher by scraping the HTML search page.
 type htmlFetcher struct {
-	client *http.Client
+	client *RetryableClient
 }
 
 // NewHTMLFetcher creates a new HTML-based VideoFetcher.
 func NewHTMLFetcher() *htmlFetcher {
+	baseClient := &http.Client{
+		Timeout: 10 * time.Second,
+	}
 	return &htmlFetcher{
-		client: &http.Client{
-			Timeout: 10 * time.Second,
-		},
+		client: NewRetryableClient(baseClient),
 	}
 }
 
@@ -51,7 +124,7 @@ func (f *htmlFetcher) FetchByTag(ctx context.Context, tag string) ([]Video, erro
 	}
 	req.Header.Set("User-Agent", "nicovideo_tag_rss/0.1 (https://github.com/witchcraze/nicovideo_tag_rss)")
 
-	resp, err := f.client.Do(req)
+	resp, err := f.client.Do(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("http request failed: %w", err)
 	}
