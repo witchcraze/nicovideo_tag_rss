@@ -10,9 +10,11 @@ import (
 
 // Config represents the application configuration.
 type Config struct {
-	Listen         string        `yaml:"listen"`
-	UpdateInterval time.Duration `yaml:"update_interval"`
-	Feeds          []FeedConfig  `yaml:"feeds"`
+	Listen              string        `yaml:"listen"`
+	UpdateInterval      time.Duration `yaml:"update_interval"`
+	CacheDir            string        `yaml:"cache_dir"`
+	VideoRetentionDays  int           `yaml:"video_retention_days"`
+	Feeds               []FeedConfig  `yaml:"feeds"`
 }
 
 // FeedConfig represents the configuration for a single RSS feed.
@@ -41,6 +43,12 @@ func LoadConfig(filename string) (*Config, error) {
 	}
 	if cfg.UpdateInterval == 0 {
 		cfg.UpdateInterval = 5 * time.Minute
+	}
+	if cfg.CacheDir == "" {
+		cfg.CacheDir = "./cache"
+	}
+	if cfg.VideoRetentionDays <= 0 {
+		cfg.VideoRetentionDays = 7
 	}
 
 	// Validate
