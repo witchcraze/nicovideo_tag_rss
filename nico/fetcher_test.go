@@ -119,8 +119,8 @@ func (m *MockPaginationRoundTripper) RoundTrip(req *http.Request) (*http.Respons
 
 // MockRoundTripper for testing retry logic
 type MockRoundTripper struct {
-	callCount int
-	failTimes int // Number of times to fail before succeeding
+	callCount  int
+	failTimes  int // Number of times to fail before succeeding
 	statusCode int
 	shouldFail bool // When true, always fail
 }
