@@ -19,7 +19,7 @@
 
 ```yaml
 listen: ":8080"
-update_interval: 15m
+update_interval: 180m
 cache_dir: "./cache"
 video_retention_days: 7
 max_pages: 1
@@ -40,7 +40,7 @@ feeds:
 ```
 
 - `listen`: サーバーがリッスンするアドレス（デフォルト `":8080"`）
-- `update_interval`: ニコニコ動画へタグ検索情報を取得しに行く間隔（デフォルト `5m`）
+- `update_interval`: ニコニコ動画へタグ検索情報を取得しに行く間隔（デフォルト `180m`、最小 `60m`）
 - `cache_dir`: キャッシュファイルを保存するディレクトリ（デフォルト `"./cache"`）。ディレクトリが存在しない場合は自動作成されます。
 - `video_retention_days`: キャッシュの feed から古いビデオを削除する期間（日数）。この期間より古い公開日時のビデオは自動削除されます。（デフォルト `7` 日）
 - `max_pages`: タグ検索時に取得する最大ページ数。複数ページの検索結果をマージします。（デフォルト `1` ページ、ページングなし）

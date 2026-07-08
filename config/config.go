@@ -43,7 +43,12 @@ func LoadConfig(filename string) (*Config, error) {
 		cfg.Listen = ":8080"
 	}
 	if cfg.UpdateInterval == 0 {
-		cfg.UpdateInterval = 5 * time.Minute
+		// Default to 180 minutes to reduce aggressive polling
+		cfg.UpdateInterval = 180 * time.Minute
+	}
+	// Enforce a sensible minimum to protect both our service and the upstream
+	if cfg.UpdateInterval < 60*time.Minute {
+		cfg.UpdateInterval = 60 * time.Minute
 	}
 	if cfg.CacheDir == "" {
 		cfg.CacheDir = "./cache"
