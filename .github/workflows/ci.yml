@@ -76,10 +76,16 @@ jobs:
           curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH 2>/dev/null || echo $HOME/go)/bin v1.59.0
           export PATH="$(go env GOPATH 2>/dev/null || echo $HOME/go)/bin:$PATH"
 
-      - name: Run golangci-lint
+      - name: Run golangci-lint (error-level fail)
         run: |
           export PATH="$(go env GOPATH 2>/dev/null || echo $HOME/go)/bin:$PATH"
-          golangci-lint run --timeout 5m || true
+          # Run with JSON output and do not fail by default; later fail only if any issue has severity "error".
+          golangci-lint run --out-format json --timeout 5m --issues-exit-code 0 2>/dev/null | tee golangci-report.json || true
+          if grep -qi '"severity"[[:space:]]*:[[:space:]]*"error"' golangci-report.json; then
+            echo "golangci-lint found error-level issues:"; jq . < golangci-report.json || cat golangci-report.json
+            exit 1
+          fi
+          echo "No error-level issues found"
 
   build-and-push-image:
     needs: test
