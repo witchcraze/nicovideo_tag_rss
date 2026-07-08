@@ -85,8 +85,7 @@ func TestNicoFetcher_FetchByTag(t *testing.T) {
 
 // MockPaginationRoundTripper simulates paginated responses
 type MockPaginationRoundTripper struct {
-	callCount  int
-	statusCode int
+	callCount int
 }
 
 func (m *MockPaginationRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -123,7 +122,6 @@ type MockRoundTripper struct {
 	callCount  int
 	failTimes  int // Number of times to fail before succeeding
 	statusCode int
-	body       string
 	shouldFail bool // When true, always fail
 }
 
