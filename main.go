@@ -55,6 +55,7 @@ func main() {
 	}
 
 	fetcher := nico.NewHTMLFetcher()
+	fetcher.SetMaxPages(cfg.MaxPages)
 	aggregator := feed.NewAggregator(fetcher, cache)
 
 	// 6. Start background updater
