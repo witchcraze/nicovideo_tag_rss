@@ -99,9 +99,9 @@ func TestCleanExpired(t *testing.T) {
 
 	cf := &CachedFeed{
 		Videos: []nico.Video{
-			{ID: "sm1", PubDate: now},                          // Today
-			{ID: "sm2", PubDate: now.Add(-3 * 24 * time.Hour)}, // 3 days ago
-			{ID: "sm3", PubDate: now.Add(-8 * 24 * time.Hour)}, // 8 days ago (should be removed)
+			{ID: "sm1", PubDate: now},                           // Today
+			{ID: "sm2", PubDate: now.Add(-3 * 24 * time.Hour)},  // 3 days ago
+			{ID: "sm3", PubDate: now.Add(-8 * 24 * time.Hour)},  // 8 days ago (should be removed)
 			{ID: "sm4", PubDate: now.Add(-15 * 24 * time.Hour)}, // 15 days ago (should be removed)
 		},
 		RSSXML:      []byte("<rss></rss>"),

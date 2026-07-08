@@ -67,7 +67,7 @@ func TestAggregator_Update_ErrorHandling(t *testing.T) {
 	// エラーを返しつつ、古いキャッシュが維持されることを確認する。
 	now := time.Now()
 	oldVideo := nico.Video{ID: "sm99", Title: "Old Video", PubDate: now}
-	
+
 	fetcher := &mockFetcher{
 		err: errors.New("network error"),
 	}

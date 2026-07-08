@@ -36,7 +36,7 @@ func (h *Handler) handleHealthz(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) handleFeed(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
-	
+
 	cf, ok := h.cache.Get(name)
 	if !ok || cf == nil {
 		http.Error(w, "Feed not found", http.StatusNotFound)
@@ -72,12 +72,12 @@ func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	
+
 	html := "<html><body><h1>Available Feeds</h1><ul>"
 	for _, f := range h.cfg.Feeds {
 		html += fmt.Sprintf(`<li><a href="/feed/%s">%s</a> - %s</li>`, f.Name, f.Title, f.Description)
 	}
 	html += "</ul></body></html>"
-	
+
 	w.Write([]byte(html))
 }

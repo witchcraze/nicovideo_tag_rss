@@ -132,10 +132,10 @@ func updateFeeds(ctx context.Context, cfg *config.Config, aggregator *feed.Aggre
 	for _, feedCfg := range cfg.Feeds {
 		slog.Info("started feed update", "feed", feedCfg.Name)
 		start := time.Now()
-		
+
 		err := aggregator.Update(ctx, feedCfg.Name, feedCfg)
 		duration := time.Since(start)
-		
+
 		if err != nil {
 			slog.Error("feed update failed", "feed", feedCfg.Name, "duration_ms", duration.Milliseconds(), "error", err)
 		} else {
