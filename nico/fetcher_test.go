@@ -2,6 +2,9 @@ package nico
 
 import (
 	"context"
+	"errors"
+	"io"
+	"net/http"
 	"os"
 	"testing"
 	"time"
@@ -76,5 +79,147 @@ func TestNicoFetcher_FetchByTag(t *testing.T) {
 	}
 	if len(videos) == 0 {
 		t.Fatal("expected videos to be fetched, got 0")
+	}
+}
+
+// MockRoundTripper for testing retry logic
+type MockRoundTripper struct {
+	callCount int
+	failTimes int // Number of times to fail before succeeding
+	statusCode int
+	body string
+	shouldFail bool // When true, always fail
+}
+
+func (m *MockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	m.callCount++
+	
+	// Count down failures
+	if m.callCount <= m.failTimes {
+		if m.shouldFail && m.callCount == m.failTimes {
+			return nil, errors.New("simulated network error")
+		}
+		// Return server error for retryable status codes
+		return &http.Response{
+			StatusCode: m.statusCode,
+			Body:       io.NopCloser(nil),
+		}, nil
+	}
+	
+	// Success response
+	return &http.Response{
+		StatusCode: 200,
+		Body:       io.NopCloser(nil),
+	}, nil
+}
+
+func TestRetryableClient_Success(t *testing.T) {
+	mock := &MockRoundTripper{failTimes: 0, statusCode: 500}
+	client := &http.Client{Transport: mock}
+	retrier := NewRetryableClient(client)
+	
+	req, _ := http.NewRequest("GET", "http://example.com", nil)
+	resp, err := retrier.Do(context.Background(), req)
+	
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if resp.StatusCode != 200 {
+		t.Errorf("expected status 200, got %d", resp.StatusCode)
+	}
+	if mock.callCount != 1 {
+		t.Errorf("expected 1 call, got %d", mock.callCount)
+	}
+}
+
+func TestRetryableClient_RetryOnServerError(t *testing.T) {
+	// Fail 2 times with 500, then succeed
+	mock := &MockRoundTripper{failTimes: 2, statusCode: 500}
+	client := &http.Client{Transport: mock}
+	retrier := NewRetryableClient(client)
+	
+	req, _ := http.NewRequest("GET", "http://example.com", nil)
+	start := time.Now()
+	resp, err := retrier.Do(context.Background(), req)
+	elapsed := time.Since(start)
+	
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if resp.StatusCode != 200 {
+		t.Errorf("expected status 200, got %d", resp.StatusCode)
+	}
+	if mock.callCount != 3 {
+		t.Errorf("expected 3 calls, got %d", mock.callCount)
+	}
+	
+	// Check that backoff was applied (should be at least 1 second)
+	if elapsed < 1*time.Second {
+		t.Errorf("expected at least 1 second delay, got %v", elapsed)
+	}
+}
+
+func TestRetryableClient_MaxRetriesExceeded(t *testing.T) {
+	// Always fail
+	mock := &MockRoundTripper{failTimes: 10, statusCode: 500}
+	client := &http.Client{Transport: mock}
+	retrier := NewRetryableClient(client)
+	
+	req, _ := http.NewRequest("GET", "http://example.com", nil)
+	_, err := retrier.Do(context.Background(), req)
+	
+	if err == nil {
+		t.Error("expected error after max retries, got nil")
+	}
+	if mock.callCount != 5 {
+		t.Errorf("expected 5 calls (1 initial + 4 retries), got %d", mock.callCount)
+	}
+}
+
+func TestRetryableClient_NoRetryOn200(t *testing.T) {
+	mock := &MockRoundTripper{statusCode: 200}
+	client := &http.Client{Transport: mock}
+	retrier := NewRetryableClient(client)
+	
+	req, _ := http.NewRequest("GET", "http://example.com", nil)
+	resp, err := retrier.Do(context.Background(), req)
+	
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if resp.StatusCode != 200 {
+		t.Errorf("expected status 200, got %d", resp.StatusCode)
+	}
+	if mock.callCount != 1 {
+		t.Errorf("expected 1 call (no retries), got %d", mock.callCount)
+	}
+}
+
+func TestRetryableClient_MinimumInterval(t *testing.T) {
+	// Consecutive requests should have at least 1 second interval
+	mock := &MockRoundTripper{failTimes: 0, statusCode: 200}
+	client := &http.Client{Transport: mock}
+	retrier := NewRetryableClient(client)
+	
+	req, _ := http.NewRequest("GET", "http://example.com", nil)
+	
+	// First request
+	_, err := retrier.Do(context.Background(), req)
+	if err != nil {
+		t.Fatalf("first request failed: %v", err)
+	}
+	
+	// Second request - should wait at least 1 second
+	start2 := time.Now()
+	_, err = retrier.Do(context.Background(), req)
+	elapsed2 := time.Since(start2)
+	
+	if err != nil {
+		t.Fatalf("second request failed: %v", err)
+	}
+	
+	// The second request should have waited at least 1 second
+	if elapsed2 < 1*time.Second {
+		t.Errorf("expected at least 1 second delay before second request, got %v", elapsed2)
 	}
 }
