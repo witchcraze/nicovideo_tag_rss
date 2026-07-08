@@ -116,8 +116,29 @@ docker compose up -d
 
 ローカルで実行する場合は、Go 1.26以上がインストールされた環境で以下を実行します。
 
+### 実行
 ```bash
+# アプリを起動
 go run main.go -config config.example.yaml
+```
+
+### CI と同等の軽量チェック（ローカル）
+以下は CI に追加したチェックと同等のローカル実行手順です。
+
+```bash
+# ビルド確認
+go build ./...
+
+# go vet (静的チェック)
+go vet ./...
+
+# race detector を有効にしたテスト
+go test -v -race ./...
+
+# gofmt によるフォーマットチェック（未整形のファイルがあれば失敗）
+if [ -n "$(gofmt -l .)" ]; then
+  echo "gofmt found unformatted files:"; gofmt -l .; exit 1
+fi
 ```
 
 ## ライセンス

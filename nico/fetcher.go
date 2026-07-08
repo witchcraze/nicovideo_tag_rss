@@ -25,9 +25,9 @@ type RetryableClient struct {
 func NewRetryableClient(client *http.Client) *RetryableClient {
 	return &RetryableClient{
 		client:         client,
-		maxRetries:     4,                // 4 retries = 5 total attempts
-		minInterval:    1 * time.Second,  // Minimum 1 second between requests
-		initialBackoff: 1 * time.Second,  // Start with 1 second backoff
+		maxRetries:     4,               // 4 retries = 5 total attempts
+		minInterval:    1 * time.Second, // Minimum 1 second between requests
+		initialBackoff: 1 * time.Second, // Start with 1 second backoff
 	}
 }
 

@@ -20,7 +20,7 @@ func TestNicoFetcher_Parse(t *testing.T) {
 	defer f.Close()
 
 	fetcher := NewHTMLFetcher()
-	
+
 	videos, err := fetcher.parseHTML(f)
 	if err != nil {
 		t.Fatalf("parseHTML failed: %v", err)
@@ -55,7 +55,7 @@ func TestNicoFetcher_Parse(t *testing.T) {
 	if v.Link != "https://www.nicovideo.jp/watch/sm33716375" {
 		t.Errorf("expected Link to be 'https://www.nicovideo.jp/watch/sm33716375', got '%s'", v.Link)
 	}
-	
+
 	expectedTime, _ := time.Parse(time.RFC3339, "2018-08-19T17:20:03+09:00")
 	if !v.PubDate.Equal(expectedTime) {
 		t.Errorf("expected PubDate '%v', got '%v'", expectedTime, v.PubDate)
@@ -91,13 +91,13 @@ type MockPaginationRoundTripper struct {
 
 func (m *MockPaginationRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	m.callCount++
-	
+
 	// Extract page number from query
 	page := req.URL.Query().Get("page")
 	if page == "" {
 		page = "1"
 	}
-	
+
 	// Return different HTML based on page number (simplified mock)
 	var body string
 	switch page {
@@ -111,7 +111,7 @@ func (m *MockPaginationRoundTripper) RoundTrip(req *http.Request) (*http.Respons
 		// Empty result for pages beyond 3
 		body = `<meta name="server-response" content="{&quot;data&quot;:{&quot;response&quot;:{&quot;$getSearchVideoV2&quot;:{&quot;data&quot;:{&quot;items&quot;:[]}}}}}"/>`
 	}
-	
+
 	return &http.Response{
 		StatusCode: 200,
 		Body:       io.NopCloser(strings.NewReader(body)),
@@ -120,16 +120,16 @@ func (m *MockPaginationRoundTripper) RoundTrip(req *http.Request) (*http.Respons
 
 // MockRoundTripper for testing retry logic
 type MockRoundTripper struct {
-	callCount int
-	failTimes int // Number of times to fail before succeeding
+	callCount  int
+	failTimes  int // Number of times to fail before succeeding
 	statusCode int
-	body string
+	body       string
 	shouldFail bool // When true, always fail
 }
 
 func (m *MockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	m.callCount++
-	
+
 	// Count down failures
 	if m.callCount <= m.failTimes {
 		if m.shouldFail && m.callCount == m.failTimes {
@@ -141,7 +141,7 @@ func (m *MockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 			Body:       io.NopCloser(nil),
 		}, nil
 	}
-	
+
 	// Success response
 	return &http.Response{
 		StatusCode: 200,
@@ -153,10 +153,10 @@ func TestRetryableClient_Success(t *testing.T) {
 	mock := &MockRoundTripper{failTimes: 0, statusCode: 500}
 	client := &http.Client{Transport: mock}
 	retrier := NewRetryableClient(client)
-	
+
 	req, _ := http.NewRequest("GET", "http://example.com", nil)
 	resp, err := retrier.Do(context.Background(), req)
-	
+
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -173,12 +173,12 @@ func TestRetryableClient_RetryOnServerError(t *testing.T) {
 	mock := &MockRoundTripper{failTimes: 2, statusCode: 500}
 	client := &http.Client{Transport: mock}
 	retrier := NewRetryableClient(client)
-	
+
 	req, _ := http.NewRequest("GET", "http://example.com", nil)
 	start := time.Now()
 	resp, err := retrier.Do(context.Background(), req)
 	elapsed := time.Since(start)
-	
+
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -188,7 +188,7 @@ func TestRetryableClient_RetryOnServerError(t *testing.T) {
 	if mock.callCount != 3 {
 		t.Errorf("expected 3 calls, got %d", mock.callCount)
 	}
-	
+
 	// Check that backoff was applied (should be at least 1 second)
 	if elapsed < 1*time.Second {
 		t.Errorf("expected at least 1 second delay, got %v", elapsed)
@@ -200,10 +200,10 @@ func TestRetryableClient_MaxRetriesExceeded(t *testing.T) {
 	mock := &MockRoundTripper{failTimes: 10, statusCode: 500}
 	client := &http.Client{Transport: mock}
 	retrier := NewRetryableClient(client)
-	
+
 	req, _ := http.NewRequest("GET", "http://example.com", nil)
 	_, err := retrier.Do(context.Background(), req)
-	
+
 	if err == nil {
 		t.Error("expected error after max retries, got nil")
 	}
@@ -216,10 +216,10 @@ func TestRetryableClient_NoRetryOn200(t *testing.T) {
 	mock := &MockRoundTripper{statusCode: 200}
 	client := &http.Client{Transport: mock}
 	retrier := NewRetryableClient(client)
-	
+
 	req, _ := http.NewRequest("GET", "http://example.com", nil)
 	resp, err := retrier.Do(context.Background(), req)
-	
+
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -236,24 +236,24 @@ func TestRetryableClient_MinimumInterval(t *testing.T) {
 	mock := &MockRoundTripper{failTimes: 0, statusCode: 200}
 	client := &http.Client{Transport: mock}
 	retrier := NewRetryableClient(client)
-	
+
 	req, _ := http.NewRequest("GET", "http://example.com", nil)
-	
+
 	// First request
 	_, err := retrier.Do(context.Background(), req)
 	if err != nil {
 		t.Fatalf("first request failed: %v", err)
 	}
-	
+
 	// Second request - should wait at least 1 second
 	start2 := time.Now()
 	_, err = retrier.Do(context.Background(), req)
 	elapsed2 := time.Since(start2)
-	
+
 	if err != nil {
 		t.Fatalf("second request failed: %v", err)
 	}
-	
+
 	// The second request should have waited at least 1 second
 	if elapsed2 < 1*time.Second {
 		t.Errorf("expected at least 1 second delay before second request, got %v", elapsed2)
@@ -267,12 +267,12 @@ func TestFetchByTag_SinglePage(t *testing.T) {
 		client: NewRetryableClient(client),
 	}
 	fetcher.maxPages = 1
-	
+
 	videos, err := fetcher.FetchByTag(context.Background(), "test")
 	if err != nil {
 		t.Fatalf("FetchByTag failed: %v", err)
 	}
-	
+
 	// Should fetch only page 1
 	if len(videos) != 1 {
 		t.Errorf("expected 1 video, got %d", len(videos))
@@ -292,12 +292,12 @@ func TestFetchByTag_MultiplePages(t *testing.T) {
 		client: NewRetryableClient(client),
 	}
 	fetcher.maxPages = 3
-	
+
 	videos, err := fetcher.FetchByTag(context.Background(), "test")
 	if err != nil {
 		t.Fatalf("FetchByTag failed: %v", err)
 	}
-	
+
 	// Should fetch 3 pages = 3 videos
 	if len(videos) != 3 {
 		t.Errorf("expected 3 videos, got %d", len(videos))
@@ -317,12 +317,12 @@ func TestFetchByTag_DefaultSinglePage(t *testing.T) {
 		client: NewRetryableClient(client),
 	}
 	// maxPages not set, should default to 1
-	
+
 	videos, err := fetcher.FetchByTag(context.Background(), "test")
 	if err != nil {
 		t.Fatalf("FetchByTag failed: %v", err)
 	}
-	
+
 	// Should fetch only page 1 by default
 	if len(videos) != 1 {
 		t.Errorf("expected 1 video (default 1 page), got %d", len(videos))

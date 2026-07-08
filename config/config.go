@@ -10,12 +10,12 @@ import (
 
 // Config represents the application configuration.
 type Config struct {
-	Listen              string        `yaml:"listen"`
-	UpdateInterval      time.Duration `yaml:"update_interval"`
-	CacheDir            string        `yaml:"cache_dir"`
-	VideoRetentionDays  int           `yaml:"video_retention_days"`
-	MaxPages            int           `yaml:"max_pages"`
-	Feeds               []FeedConfig  `yaml:"feeds"`
+	Listen             string        `yaml:"listen"`
+	UpdateInterval     time.Duration `yaml:"update_interval"`
+	CacheDir           string        `yaml:"cache_dir"`
+	VideoRetentionDays int           `yaml:"video_retention_days"`
+	MaxPages           int           `yaml:"max_pages"`
+	Feeds              []FeedConfig  `yaml:"feeds"`
 }
 
 // FeedConfig represents the configuration for a single RSS feed.
