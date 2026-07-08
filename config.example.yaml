@@ -1,5 +1,5 @@
 listen: ":8080"
-update_interval: 180m
+update_interval: 15m
 cache_dir: "./cache"
 video_retention_days: 7
 max_pages: 1
