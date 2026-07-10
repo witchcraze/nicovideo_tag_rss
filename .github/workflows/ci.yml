@@ -27,8 +27,16 @@ jobs:
       - name: Run go vet
         run: go vet ./...
 
-      - name: Test (with race detector)
-        run: go test -v -race ./...
+      - name: Test with race detector and coverage
+        run: |
+          go test -v -race -covermode=atomic -coverpkg=./... -coverprofile=coverage.out ./...
+          go tool cover -func=coverage.out | tee coverage.txt
+          {
+            echo "## Test coverage"
+            echo "```text"
+            cat coverage.txt
+            echo "```"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Check gofmt
         run: |
@@ -58,7 +66,7 @@ jobs:
           "$(go env GOPATH)/bin/staticcheck" ./...
 
   build-and-push-image:
-    needs: test
+    needs: [test, staticcheck]
     runs-on: ubuntu-latest
     # Only push to GHCR on main branch pushes, not on PRs
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
