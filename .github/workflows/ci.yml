@@ -55,7 +55,7 @@ jobs:
 
       - name: Run staticcheck
         run: |
-          "$(go env GOPATH)/bin/staticcheck" ./....
+          "$(go env GOPATH)/bin/staticcheck" ./...
 
   build-and-push-image:
     needs: test
