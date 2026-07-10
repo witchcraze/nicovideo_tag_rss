@@ -122,24 +122,36 @@ docker compose up -d
 go run main.go -config config.example.yaml
 ```
 
-### CI と同等の軽量チェック（ローカル）
-以下は CI に追加したチェックと同等のローカル実行手順です。
+### 品質チェック（ローカル）
+
+CI は、プルリクエストと `main` への push でビルド、`go vet`、レース検出付きテスト、フォーマット、Staticcheck を実行します。Docker イメージの build/push は、テストと Staticcheck の両方が成功した後にだけ実行されます。
+
+ローカルでは以下を実行できます。
 
 ```bash
 # ビルド確認
 go build ./...
 
-# go vet (静的チェック)
+# go vet
 go vet ./...
 
-# race detector を有効にしたテスト
-go test -v -race ./...
+# Staticcheck（初回のみインストール）
+go install honnef.co/go/tools/cmd/staticcheck@2026.1
+"$(go env GOPATH)/bin/staticcheck" ./...
+
+# race detector を有効にしたテストとカバレッジ計測
+go test -v -race -covermode=atomic -coverpkg=./... -coverprofile=coverage.out ./...
+go tool cover -func=coverage.out
 
 # gofmt によるフォーマットチェック（未整形のファイルがあれば失敗）
 if [ -n "$(gofmt -l .)" ]; then
   echo "gofmt found unformatted files:"; gofmt -l .; exit 1
 fi
 ```
+
+### カバレッジ方針
+
+CI はテストカバレッジをジョブサマリーへ出力します。現時点では数値の閾値で CI を失敗させません。カバレッジは、未テストの重要な分岐・エラー処理・パース処理を見つけ、テスト追加の優先度を判断するために使います。新しいビジネスロジックや不具合修正には、関連する振る舞いを検証するテストを追加してください。
 
 ## ライセンス
 
