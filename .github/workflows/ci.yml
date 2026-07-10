@@ -40,9 +40,8 @@ jobs:
           fi
 
   staticcheck:
-    name: staticcheck (informational)
+    name: staticcheck
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -52,40 +51,11 @@ jobs:
           go-version: '1.26'
 
       - name: Install staticcheck
-        run: |
-          export PATH="$(go env GOPATH 2>/dev/null || echo $HOME/go)/bin:$PATH"
-          go install honnef.co/go/tools/cmd/staticcheck@latest
+        run: go install honnef.co/go/tools/cmd/staticcheck@2026.1
 
       - name: Run staticcheck
-        run: staticcheck ./...
-
-  golangci-lint:
-    name: golangci-lint (informational)
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.26'
-
-      - name: Install golangci-lint
         run: |
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH 2>/dev/null || echo $HOME/go)/bin v1.59.0
-          export PATH="$(go env GOPATH 2>/dev/null || echo $HOME/go)/bin:$PATH"
-
-      - name: Run golangci-lint (error-level fail)
-        run: |
-          export PATH="$(go env GOPATH 2>/dev/null || echo $HOME/go)/bin:$PATH"
-          # Run with JSON output and do not fail by default; later fail only if any issue has severity "error".
-          golangci-lint run --out-format json --timeout 5m --issues-exit-code 0 2>/dev/null | tee golangci-report.json || true
-          if grep -qi '"severity"[[:space:]]*:[[:space:]]*"error"' golangci-report.json; then
-            echo "golangci-lint found error-level issues:"; jq . < golangci-report.json || cat golangci-report.json
-            exit 1
-          fi
-          echo "No error-level issues found"
+          "$(go env GOPATH)/bin/staticcheck" ./...
 
   build-and-push-image:
     needs: test
