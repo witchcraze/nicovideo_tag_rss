@@ -212,6 +212,33 @@ func TestRetryableClient_MaxRetriesExceeded(t *testing.T) {
 	}
 }
 
+func TestRetryableClient_MaxRetriesExceededWithResponse(t *testing.T) {
+	// Always return 500 (resp is non-nil). This covers the `resp != nil` branch
+	// in Do() when max retries is exceeded with a server error response.
+	mock := &MockRoundTripper{failTimes: 10, statusCode: 500, shouldFail: false}
+	client := &http.Client{Transport: mock}
+	retrier := NewRetryableClient(client)
+
+	req, _ := http.NewRequest("GET", "http://example.com", nil)
+	resp, err := retrier.Do(context.Background(), req)
+
+	if err == nil {
+		t.Error("expected error after max retries, got nil")
+	}
+	if !strings.Contains(err.Error(), "max retries exceeded: status 500") {
+		t.Errorf("expected error to contain 'max retries exceeded: status 500', got %v", err)
+	}
+	if resp == nil {
+		t.Fatal("expected non-nil response when max retries exceeded with 5xx")
+	}
+	if resp.StatusCode != 500 {
+		t.Errorf("expected status 500, got %d", resp.StatusCode)
+	}
+	if mock.callCount != 5 {
+		t.Errorf("expected 5 calls (1 initial + 4 retries), got %d", mock.callCount)
+	}
+}
+
 func TestRetryableClient_NoRetryOn200(t *testing.T) {
 	mock := &MockRoundTripper{statusCode: 200}
 	client := &http.Client{Transport: mock}
