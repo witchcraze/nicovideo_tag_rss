@@ -74,7 +74,7 @@ func TestNicoFetcher_FetchByTag(t *testing.T) {
 	t.Skip("Skipping actual network request test")
 
 	fetcher := NewHTMLFetcher()
-	videos, err := fetcher.FetchByTag(context.Background(), "paula")
+	videos, err := fetcher.FetchByTag(context.Background(), "paula", "registeredAt")
 	if err != nil {
 		t.Fatalf("FetchByTag failed: %v", err)
 	}
@@ -86,10 +86,12 @@ func TestNicoFetcher_FetchByTag(t *testing.T) {
 // MockPaginationRoundTripper simulates paginated responses
 type MockPaginationRoundTripper struct {
 	callCount int
+	lastSort  string
 }
 
 func (m *MockPaginationRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	m.callCount++
+	m.lastSort = req.URL.Query().Get("sort")
 
 	// Extract page number from query
 	page := req.URL.Query().Get("page")
@@ -266,7 +268,7 @@ func TestFetchByTag_SinglePage(t *testing.T) {
 	}
 	fetcher.maxPages = 1
 
-	videos, err := fetcher.FetchByTag(context.Background(), "test")
+	videos, err := fetcher.FetchByTag(context.Background(), "test", "viewCount")
 	if err != nil {
 		t.Fatalf("FetchByTag failed: %v", err)
 	}
@@ -281,6 +283,9 @@ func TestFetchByTag_SinglePage(t *testing.T) {
 	if mock.callCount != 1 {
 		t.Errorf("expected 1 HTTP call, got %d", mock.callCount)
 	}
+	if mock.lastSort != "viewCount" {
+		t.Errorf("expected sort 'viewCount', got '%s'", mock.lastSort)
+	}
 }
 
 func TestFetchByTag_MultiplePages(t *testing.T) {
@@ -291,7 +296,7 @@ func TestFetchByTag_MultiplePages(t *testing.T) {
 	}
 	fetcher.maxPages = 3
 
-	videos, err := fetcher.FetchByTag(context.Background(), "test")
+	videos, err := fetcher.FetchByTag(context.Background(), "test", "registeredAt")
 	if err != nil {
 		t.Fatalf("FetchByTag failed: %v", err)
 	}
@@ -306,6 +311,9 @@ func TestFetchByTag_MultiplePages(t *testing.T) {
 	if mock.callCount != 3 {
 		t.Errorf("expected 3 HTTP calls, got %d", mock.callCount)
 	}
+	if mock.lastSort != "registeredAt" {
+		t.Errorf("expected sort 'registeredAt', got '%s'", mock.lastSort)
+	}
 }
 
 func TestFetchByTag_DefaultSinglePage(t *testing.T) {
@@ -316,7 +324,7 @@ func TestFetchByTag_DefaultSinglePage(t *testing.T) {
 	}
 	// maxPages not set, should default to 1
 
-	videos, err := fetcher.FetchByTag(context.Background(), "test")
+	videos, err := fetcher.FetchByTag(context.Background(), "test", "")
 	if err != nil {
 		t.Fatalf("FetchByTag failed: %v", err)
 	}
@@ -327,5 +335,8 @@ func TestFetchByTag_DefaultSinglePage(t *testing.T) {
 	}
 	if mock.callCount != 1 {
 		t.Errorf("expected 1 HTTP call, got %d", mock.callCount)
+	}
+	if mock.lastSort != "registeredAt" {
+		t.Errorf("expected sort 'registeredAt' (default), got '%s'", mock.lastSort)
 	}
 }

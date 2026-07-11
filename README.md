@@ -31,6 +31,13 @@ feeds:
     tags:
       - "VOCALOID"
       - "初音ミク"
+    sorts:
+      - id: "latest"
+        sort: "registeredAt"
+        title: "最新投稿"
+      - id: "popular"
+        sort: "viewCount"
+        title: "人気順"
 
   - name: "game_commentary"
     title: "Game Commentary"
@@ -45,6 +52,10 @@ feeds:
 - `video_retention_days`: キャッシュの feed から古いビデオを削除する期間（日数）。この期間より古い公開日時のビデオは自動削除されます。（デフォルト `7` 日）
 - `max_pages`: タグ検索時に取得する最大ページ数。複数ページの検索結果をマージします。（デフォルト `1` ページ、ページングなし）
 - `feeds`: 生成するRSSフィードのリスト。`name` がURLパス（例: `/feed/vocaloid`）になります。
+  - `sorts` (オプション): フィード内で取得するソート条件（バリエーション）のリスト。指定されたすべてのソート条件から動画を取得・マージし、重複を排除したRSSフィードを配信します。省略した場合は `registeredAt`（最新投稿）が自動で適用されます。
+    - `id`: バリエーションID
+    - `sort`: ニコニコ動画の `sort` パラメータに指定する値（例: `registeredAt`, `viewCount`, `mylistCount`, `commentCount` 等）
+    - `title`: バリエーション名（管理・表示用）
 
 ### 2. Docker Compose (Nginxリバースプロキシ付き) での起動
 
@@ -108,6 +119,7 @@ docker compose up -d
   - 登録されているFeedの一覧をHTML形式で返します。
 - `GET /feed/{name}`
   - 指定された `name` のRSSフィード（RSS 2.0形式）を返します。ETagによる `304 Not Modified` に対応しています。
+  - 指定されたフィード内のすべてのソートバリエーション（`sorts`）から取得した動画群がマージ・重複排除されて配信されます。
   - キャッシュされたデータを返すため高速かつ安定しています。
 - `GET /healthz`
   - ヘルスチェック用エンドポイント（200 OK）です。

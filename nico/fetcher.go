@@ -97,7 +97,7 @@ type Video struct {
 
 // VideoFetcher defines the interface for fetching videos by tag.
 type VideoFetcher interface {
-	FetchByTag(ctx context.Context, tag string) ([]Video, error)
+	FetchByTag(ctx context.Context, tag string, sort string) ([]Video, error)
 }
 
 // htmlFetcher implements VideoFetcher by scraping the HTML search page.
@@ -126,7 +126,7 @@ func (f *htmlFetcher) SetMaxPages(maxPages int) {
 }
 
 // FetchByTag fetches videos for a given tag across multiple pages.
-func (f *htmlFetcher) FetchByTag(ctx context.Context, tag string) ([]Video, error) {
+func (f *htmlFetcher) FetchByTag(ctx context.Context, tag string, sort string) ([]Video, error) {
 	var allVideos []Video
 	maxPages := f.maxPages
 	if maxPages < 1 {
@@ -134,7 +134,7 @@ func (f *htmlFetcher) FetchByTag(ctx context.Context, tag string) ([]Video, erro
 	}
 
 	for page := 1; page <= maxPages; page++ {
-		videos, err := f.fetchPage(ctx, tag, page)
+		videos, err := f.fetchPage(ctx, tag, sort, page)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch page %d: %w", page, err)
 		}
@@ -151,8 +151,11 @@ func (f *htmlFetcher) FetchByTag(ctx context.Context, tag string) ([]Video, erro
 }
 
 // fetchPage fetches videos from a specific page.
-func (f *htmlFetcher) fetchPage(ctx context.Context, tag string, page int) ([]Video, error) {
-	reqURL := fmt.Sprintf("https://www.nicovideo.jp/tag/%s?sort=registeredAt&order=desc&page=%d", url.QueryEscape(tag), page)
+func (f *htmlFetcher) fetchPage(ctx context.Context, tag string, sort string, page int) ([]Video, error) {
+	if sort == "" {
+		sort = "registeredAt"
+	}
+	reqURL := fmt.Sprintf("https://www.nicovideo.jp/tag/%s?sort=%s&order=desc&page=%d", url.QueryEscape(tag), url.QueryEscape(sort), page)
 	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)

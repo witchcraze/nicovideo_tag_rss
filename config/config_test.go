@@ -63,6 +63,63 @@ feeds:
 	if cfg.Feeds[1].Tags[1] != "結月ゆかり" {
 		t.Errorf("expected second tag in vtuber feed to be '結月ゆかり', got '%s'", cfg.Feeds[1].Tags[1])
 	}
+
+	// Verify default sorts are set
+	for _, feed := range cfg.Feeds {
+		if len(feed.Sorts) != 1 {
+			t.Fatalf("expected 1 default sort, got %d", len(feed.Sorts))
+		}
+		s := feed.Sorts[0]
+		if s.ID != "latest" {
+			t.Errorf("expected default sort ID 'latest', got '%s'", s.ID)
+		}
+		if s.Sort != "registeredAt" {
+			t.Errorf("expected default sort 'registeredAt', got '%s'", s.Sort)
+		}
+		if s.Title != "最新投稿" {
+			t.Errorf("expected default sort title '最新投稿', got '%s'", s.Title)
+		}
+	}
+}
+
+func TestLoadConfig_ExplicitSorts(t *testing.T) {
+	yamlContent := []byte(`
+feeds:
+  - name: vocaloid
+    title: VOCALOID
+    tags:
+      - VOCALOID
+    sorts:
+      - id: latest
+        sort: registeredAt
+        title: 最新投稿
+      - id: popular
+        sort: viewCount
+        title: 人気順
+`)
+
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configFile, yamlContent, 0644); err != nil {
+		t.Fatalf("failed to write tmp config: %v", err)
+	}
+
+	cfg, err := LoadConfig(configFile)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+
+	feed := cfg.Feeds[0]
+	if len(feed.Sorts) != 2 {
+		t.Fatalf("expected 2 sorts, got %d", len(feed.Sorts))
+	}
+
+	if feed.Sorts[0].ID != "latest" || feed.Sorts[0].Sort != "registeredAt" || feed.Sorts[0].Title != "最新投稿" {
+		t.Errorf("unexpected first sort: %+v", feed.Sorts[0])
+	}
+	if feed.Sorts[1].ID != "popular" || feed.Sorts[1].Sort != "viewCount" || feed.Sorts[1].Title != "人気順" {
+		t.Errorf("unexpected second sort: %+v", feed.Sorts[1])
+	}
 }
 
 func TestLoadConfig_Validation(t *testing.T) {
@@ -114,6 +171,48 @@ feeds:
     tags: ["tag2"]
 `,
 			wantErrMsg: "duplicate feed name 'test'",
+		},
+		{
+			name: "empty sort ID",
+			yamlContent: `
+feeds:
+  - name: test
+    tags: ["tag1"]
+    sorts:
+      - id: ""
+        sort: "registeredAt"
+        title: "最新"
+`,
+			wantErrMsg: "sort ID cannot be empty",
+		},
+		{
+			name: "empty sort value",
+			yamlContent: `
+feeds:
+  - name: test
+    tags: ["tag1"]
+    sorts:
+      - id: "latest"
+        sort: ""
+        title: "最新"
+`,
+			wantErrMsg: "sort value cannot be empty",
+		},
+		{
+			name: "duplicate sort ID",
+			yamlContent: `
+feeds:
+  - name: test
+    tags: ["tag1"]
+    sorts:
+      - id: "latest"
+        sort: "registeredAt"
+        title: "最新"
+      - id: "latest"
+        sort: "viewCount"
+        title: "人気"
+`,
+			wantErrMsg: "duplicate sort ID 'latest'",
 		},
 	}
 

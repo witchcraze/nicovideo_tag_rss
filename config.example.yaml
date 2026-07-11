@@ -10,6 +10,13 @@ feeds:
     tags:
       - "VOCALOID"
       - "初音ミク"
+    sorts:
+      - id: "latest"
+        sort: "registeredAt"
+        title: "最新投稿"
+      - id: "popular"
+        sort: "viewCount"
+        title: "人気順"
   - name: "game_commentary"
     title: "Game Commentary"
     description: "Latest game commentary videos"
