@@ -13,12 +13,17 @@ import (
 type mockFetcher struct {
 	videos map[string][]nico.Video
 	err    error
+	called map[string][]string // tag -> list of sorts called
 }
 
-func (m *mockFetcher) FetchByTag(ctx context.Context, tag string) ([]nico.Video, error) {
+func (m *mockFetcher) FetchByTag(ctx context.Context, tag string, sort string) ([]nico.Video, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
+	if m.called == nil {
+		m.called = make(map[string][]string)
+	}
+	m.called[tag] = append(m.called[tag], sort)
 	return m.videos[tag], nil
 }
 
@@ -40,6 +45,9 @@ func TestAggregator_Update_MergeSortDeduplicate(t *testing.T) {
 
 	feedCfg := config.FeedConfig{
 		Tags: []string{"tag1", "tag2"},
+		Sorts: []config.SortConfig{
+			{ID: "latest", Sort: "registeredAt", Title: "最新"},
+		},
 	}
 
 	err := agg.Update(context.Background(), "test_feed", feedCfg)
@@ -62,6 +70,52 @@ func TestAggregator_Update_MergeSortDeduplicate(t *testing.T) {
 	}
 }
 
+func TestAggregator_Update_MultipleSorts(t *testing.T) {
+	now := time.Now()
+	v1 := nico.Video{ID: "sm1", Title: "Video 1", PubDate: now}
+
+	fetcher := &mockFetcher{
+		videos: map[string][]nico.Video{
+			"tag1": {v1},
+		},
+	}
+
+	cache := NewCache()
+	agg := NewAggregator(fetcher, cache)
+
+	feedCfg := config.FeedConfig{
+		Tags: []string{"tag1"},
+		Sorts: []config.SortConfig{
+			{ID: "latest", Sort: "registeredAt", Title: "最新"},
+			{ID: "popular", Sort: "viewCount", Title: "人気"},
+		},
+	}
+
+	err := agg.Update(context.Background(), "test_feed", feedCfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify calling parameters
+	calls := fetcher.called["tag1"]
+	if len(calls) != 2 {
+		t.Fatalf("expected FetchByTag to be called 2 times, got %d", len(calls))
+	}
+	if calls[0] != "registeredAt" || calls[1] != "viewCount" {
+		t.Errorf("unexpected sort parameters: %v", calls)
+	}
+
+	got, ok := cache.Get("test_feed")
+	if !ok {
+		t.Fatal("expected feed to be cached")
+	}
+
+	// Should be deduplicated to 1 video
+	if len(got.Videos) != 1 || got.Videos[0].ID != "sm1" {
+		t.Errorf("expected 1 unique video sm1, got %+v", got.Videos)
+	}
+}
+
 func TestAggregator_Update_ErrorHandling(t *testing.T) {
 	// 既存のキャッシュがある状態で、タグ取得エラーが発生した場合に
 	// エラーを返しつつ、古いキャッシュが維持されることを確認する。
@@ -81,6 +135,9 @@ func TestAggregator_Update_ErrorHandling(t *testing.T) {
 	agg := NewAggregator(fetcher, cache)
 	feedCfg := config.FeedConfig{
 		Tags: []string{"tag1"},
+		Sorts: []config.SortConfig{
+			{ID: "latest", Sort: "registeredAt", Title: "最新"},
+		},
 	}
 
 	err := agg.Update(context.Background(), "test_feed", feedCfg)

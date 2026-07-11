@@ -27,24 +27,26 @@ func NewAggregator(fetcher nico.VideoFetcher, cache *Cache) *Aggregator {
 	}
 }
 
-// Update fetches videos for all tags in a feed, merges, deduplicates, sorts,
-// and updates the cache. If a fetch error occurs, the old cache is preserved.
+// Update fetches videos for all tags in a feed under all configured sort variations,
+// merges, deduplicates, sorts by PubDate desc, and updates the cache.
+// If a fetch error occurs, the old cache is preserved.
 func (a *Aggregator) Update(ctx context.Context, feedName string, cfg config.FeedConfig) error {
 	var allVideos []nico.Video
 
-	for _, tag := range cfg.Tags {
-		videos, err := a.fetcher.FetchByTag(ctx, tag)
-		if err != nil {
-			slog.Error("failed to fetch videos for tag", "tag", tag, "feed", feedName, "error", err)
-			return err
+	for _, sortCfg := range cfg.Sorts {
+		for _, tag := range cfg.Tags {
+			videos, err := a.fetcher.FetchByTag(ctx, tag, sortCfg.Sort)
+			if err != nil {
+				slog.Error("failed to fetch videos", "tag", tag, "feed", feedName, "sort", sortCfg.Sort, "error", err)
+				return err
+			}
+			allVideos = append(allVideos, videos...)
 		}
-		allVideos = append(allVideos, videos...)
 	}
 
 	// Deduplicate by video ID
 	uniqueVideos := make(map[string]nico.Video)
 	for _, v := range allVideos {
-		// If duplicate, could keep newest or just one, they represent the same video.
 		uniqueVideos[v.ID] = v
 	}
 

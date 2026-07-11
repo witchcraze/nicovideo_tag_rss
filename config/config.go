@@ -8,6 +8,13 @@ import (
 	yaml "gopkg.in/yaml.v3"
 )
 
+// SortConfig represents a single sort variation.
+type SortConfig struct {
+	ID    string `yaml:"id"`
+	Sort  string `yaml:"sort"`
+	Title string `yaml:"title"`
+}
+
 // Config represents the application configuration.
 type Config struct {
 	Listen             string        `yaml:"listen"`
@@ -20,10 +27,11 @@ type Config struct {
 
 // FeedConfig represents the configuration for a single RSS feed.
 type FeedConfig struct {
-	Name        string   `yaml:"name"`
-	Title       string   `yaml:"title"`
-	Description string   `yaml:"description"`
-	Tags        []string `yaml:"tags"`
+	Name        string       `yaml:"name"`
+	Title       string       `yaml:"title"`
+	Description string       `yaml:"description"`
+	Tags        []string     `yaml:"tags"`
+	Sorts       []SortConfig `yaml:"sorts"`
 }
 
 // LoadConfig reads and parses the YAML configuration file, then validates it.
@@ -66,7 +74,8 @@ func LoadConfig(filename string) (*Config, error) {
 	}
 
 	seenNames := make(map[string]bool)
-	for _, feed := range cfg.Feeds {
+	for i := range cfg.Feeds {
+		feed := &cfg.Feeds[i]
 		if feed.Name == "" {
 			return nil, fmt.Errorf("feed name cannot be empty")
 		}
@@ -77,6 +86,32 @@ func LoadConfig(filename string) (*Config, error) {
 
 		if len(feed.Tags) == 0 {
 			return nil, fmt.Errorf("feed '%s' must have at least one tag", feed.Name)
+		}
+
+		// Set default Sorts if empty
+		if len(feed.Sorts) == 0 {
+			feed.Sorts = []SortConfig{
+				{
+					ID:    "latest",
+					Sort:  "registeredAt",
+					Title: "最新投稿",
+				},
+			}
+		}
+
+		// Validate Sorts
+		seenSortIDs := make(map[string]bool)
+		for _, s := range feed.Sorts {
+			if s.ID == "" {
+				return nil, fmt.Errorf("feed '%s': sort ID cannot be empty", feed.Name)
+			}
+			if s.Sort == "" {
+				return nil, fmt.Errorf("feed '%s': sort value cannot be empty", feed.Name)
+			}
+			if seenSortIDs[s.ID] {
+				return nil, fmt.Errorf("feed '%s': duplicate sort ID '%s'", feed.Name, s.ID)
+			}
+			seenSortIDs[s.ID] = true
 		}
 	}
 
