@@ -23,7 +23,7 @@ func TestAggregator_Update_AllSortsAndTagsCombined(t *testing.T) {
 	}
 
 	cache := NewCache()
-	agg := NewAggregator(fetcher, cache)
+	agg := NewAggregator(fetcher, cache, nil)
 
 	feedCfg := config.FeedConfig{
 		Tags: []string{"tagA", "tagB"},
@@ -69,7 +69,7 @@ func TestAggregator_Update_DeduplicateAcrossSorts(t *testing.T) {
 	}
 
 	cache := NewCache()
-	agg := NewAggregator(fetcher, cache)
+	agg := NewAggregator(fetcher, cache, nil)
 
 	feedCfg := config.FeedConfig{
 		Tags: []string{"tag1"},
@@ -145,7 +145,7 @@ func TestAggregator_Update_PreservesOldCacheOnFetchError(t *testing.T) {
 		ETag:        `W/"old-etag"`,
 	})
 
-	agg := NewAggregator(fetcher, cache)
+	agg := NewAggregator(fetcher, cache, nil)
 	feedCfg := config.FeedConfig{
 		Tags:  []string{"tag1"},
 		Sorts: []config.SortConfig{{ID: "latest", Sort: "registeredAt"}},

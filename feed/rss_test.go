@@ -16,7 +16,8 @@ func TestGenerateRSS_EmptyVideos(t *testing.T) {
 		Description: "Test description",
 	}
 
-	xml, err := GenerateRSS(cfg, []nico.Video{})
+	rssGen := NewRSSGenerator()
+	xml, err := rssGen.Generate(cfg, []nico.Video{})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -47,7 +48,8 @@ func TestGenerateRSS_WithVideos(t *testing.T) {
 		},
 	}
 
-	xml, err := GenerateRSS(cfg, videos)
+	rssGen := NewRSSGenerator()
+	xml, err := rssGen.Generate(cfg, videos)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}

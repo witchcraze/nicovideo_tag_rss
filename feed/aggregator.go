@@ -17,13 +17,18 @@ import (
 type Aggregator struct {
 	fetcher nico.VideoFetcher
 	cache   *Cache
+	rssGen  RSSGenerator
 }
 
 // NewAggregator creates a new Aggregator.
-func NewAggregator(fetcher nico.VideoFetcher, cache *Cache) *Aggregator {
+func NewAggregator(fetcher nico.VideoFetcher, cache *Cache, rssGen RSSGenerator) *Aggregator {
+	if rssGen == nil {
+		rssGen = NewRSSGenerator()
+	}
 	return &Aggregator{
 		fetcher: fetcher,
 		cache:   cache,
+		rssGen:  rssGen,
 	}
 }
 
@@ -60,7 +65,7 @@ func (a *Aggregator) Update(ctx context.Context, feedName string, cfg config.Fee
 		return mergedVideos[i].PubDate.After(mergedVideos[j].PubDate)
 	})
 
-	rssXML, err := GenerateRSS(cfg, mergedVideos)
+	rssXML, err := a.rssGen.Generate(cfg, mergedVideos)
 	if err != nil {
 		slog.Error("failed to generate RSS", "feed", feedName, "error", err)
 		return err
