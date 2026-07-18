@@ -41,7 +41,7 @@ func TestAggregator_Update_MergeSortDeduplicate(t *testing.T) {
 	}
 
 	cache := NewCache()
-	agg := NewAggregator(fetcher, cache)
+	agg := NewAggregator(fetcher, cache, nil)
 
 	feedCfg := config.FeedConfig{
 		Tags: []string{"tag1", "tag2"},
@@ -81,7 +81,7 @@ func TestAggregator_Update_MultipleSorts(t *testing.T) {
 	}
 
 	cache := NewCache()
-	agg := NewAggregator(fetcher, cache)
+	agg := NewAggregator(fetcher, cache, nil)
 
 	feedCfg := config.FeedConfig{
 		Tags: []string{"tag1"},
@@ -132,7 +132,7 @@ func TestAggregator_Update_ErrorHandling(t *testing.T) {
 		LastUpdated: now,
 	})
 
-	agg := NewAggregator(fetcher, cache)
+	agg := NewAggregator(fetcher, cache, nil)
 	feedCfg := config.FeedConfig{
 		Tags: []string{"tag1"},
 		Sorts: []config.SortConfig{
@@ -152,5 +152,52 @@ func TestAggregator_Update_ErrorHandling(t *testing.T) {
 
 	if len(got.Videos) != 1 || got.Videos[0].ID != "sm99" {
 		t.Error("expected old cache to be preserved")
+	}
+}
+
+type mockRSSGenerator struct {
+	err error
+}
+
+func (m *mockRSSGenerator) Generate(cfg config.FeedConfig, videos []nico.Video) ([]byte, error) {
+	return nil, m.err
+}
+
+func TestAggregator_Update_RSSGenerationError(t *testing.T) {
+	now := time.Now()
+	fetcher := &mockFetcher{
+		videos: map[string][]nico.Video{
+			"tag1": {{ID: "sm1", Title: "Video 1", PubDate: now}},
+		},
+	}
+
+	cache := NewCache()
+	// 古いキャッシュをセット
+	cache.Set("test_feed", &CachedFeed{
+		Videos:      []nico.Video{{ID: "sm_old"}},
+		LastUpdated: now,
+		ETag:        `W/"old-etag"`,
+	})
+
+	rssGen := &mockRSSGenerator{err: errors.New("rss error")}
+	agg := NewAggregator(fetcher, cache, rssGen)
+
+	feedCfg := config.FeedConfig{
+		Tags:  []string{"tag1"},
+		Sorts: []config.SortConfig{{ID: "latest", Sort: "registeredAt"}},
+	}
+
+	err := agg.Update(context.Background(), "test_feed", feedCfg)
+	if err == nil {
+		t.Fatal("expected error on RSS generation failure")
+	}
+
+	got, ok := cache.Get("test_feed")
+	if !ok {
+		t.Fatal("expected cache to still exist")
+	}
+	// キャッシュが更新されていないことを確認
+	if len(got.Videos) != 1 || got.Videos[0].ID != "sm_old" {
+		t.Error("expected old cache to be preserved when RSS generation fails")
 	}
 }

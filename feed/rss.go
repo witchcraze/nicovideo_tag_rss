@@ -9,8 +9,21 @@ import (
 	"github.com/witchcraze/nicovideo_tag_rss/nico"
 )
 
-// GenerateRSS creates an RSS 2.0 XML feed from the given configuration and videos.
-func GenerateRSS(cfg config.FeedConfig, videos []nico.Video) ([]byte, error) {
+// RSSGenerator defines the interface for generating RSS XML.
+type RSSGenerator interface {
+	Generate(cfg config.FeedConfig, videos []nico.Video) ([]byte, error)
+}
+
+// DefaultRSSGenerator is the standard implementation of RSSGenerator.
+type DefaultRSSGenerator struct{}
+
+// NewRSSGenerator creates a new DefaultRSSGenerator.
+func NewRSSGenerator() RSSGenerator {
+	return &DefaultRSSGenerator{}
+}
+
+// Generate creates an RSS 2.0 XML feed from the given configuration and videos.
+func (g *DefaultRSSGenerator) Generate(cfg config.FeedConfig, videos []nico.Video) ([]byte, error) {
 	now := time.Now()
 
 	feed := &feeds.Feed{
