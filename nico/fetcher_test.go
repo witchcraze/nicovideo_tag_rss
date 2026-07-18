@@ -367,3 +367,56 @@ func TestFetchByTag_DefaultSinglePage(t *testing.T) {
 		t.Errorf("expected sort 'registeredAt' (default), got '%s'", mock.lastSort)
 	}
 }
+
+func TestRetryableClient_NoRetryOn4xx(t *testing.T) {
+	mock := &MockRoundTripper{statusCode: 404, failTimes: 10}
+	client := &http.Client{Transport: mock}
+	retrier := NewRetryableClient(client)
+
+	req, _ := http.NewRequest("GET", "http://example.com", nil)
+	resp, err := retrier.Do(context.Background(), req)
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if mock.callCount != 1 {
+		t.Errorf("expected 1 call, got %d", mock.callCount)
+	}
+	if resp.StatusCode != 404 {
+		t.Errorf("expected 404 status, got %d", resp.StatusCode)
+	}
+}
+
+func TestParseHTML_NoMetaTag(t *testing.T) {
+	html := strings.NewReader("<html><body></body></html>")
+	fetcher := NewHTMLFetcher()
+	_, err := fetcher.parseHTML(html)
+	if err == nil || !strings.Contains(err.Error(), "not found") {
+		t.Errorf("expected error containing 'not found', got %v", err)
+	}
+}
+
+func TestParseHTML_InvalidJSON(t *testing.T) {
+	html := strings.NewReader(`<meta name="server-response" content="not-json"/>`)
+	fetcher := NewHTMLFetcher()
+	_, err := fetcher.parseHTML(html)
+	if err == nil || !strings.Contains(err.Error(), "failed to parse json") {
+		t.Errorf("expected error containing 'failed to parse json', got %v", err)
+	}
+}
+
+func TestParseHTML_InvalidDate(t *testing.T) {
+	html := strings.NewReader(`<meta name="server-response" content="{&quot;data&quot;:{&quot;response&quot;:{&quot;$getSearchVideoV2&quot;:{&quot;data&quot;:{&quot;items&quot;:[{&quot;id&quot;:&quot;sm1&quot;,&quot;title&quot;:&quot;Video1&quot;,&quot;registeredAt&quot;:&quot;invalid-date&quot;,&quot;shortDescription&quot;:&quot;desc1&quot;,&quot;thumbnail&quot;:{&quot;url&quot;:&quot;http://thumb1.jpg&quot;},&quot;owner&quot;:{&quot;name&quot;:&quot;author1&quot;}}]}}}}}"/>`)
+	fetcher := NewHTMLFetcher()
+	videos, err := fetcher.parseHTML(html)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(videos) != 1 {
+		t.Fatalf("expected 1 video, got %d", len(videos))
+	}
+	// The fallback is time.Now(), so we check if it's close to current time
+	if time.Since(videos[0].PubDate) > time.Minute {
+		t.Errorf("expected PubDate to be close to now, got %v", videos[0].PubDate)
+	}
+}
