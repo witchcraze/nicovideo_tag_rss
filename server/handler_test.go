@@ -105,3 +105,36 @@ func TestHandler_Index(t *testing.T) {
 		t.Errorf("expected body to contain feed names, got %v", body)
 	}
 }
+
+func TestHandler_Index_NotFound(t *testing.T) {
+	cache := feed.NewCache()
+	h := NewHandler(cache, nil)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	req := httptest.NewRequest("GET", "/unknown", nil)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("expected 404 Not Found, got %v", rr.Code)
+	}
+}
+
+func TestHandler_Index_NilConfig(t *testing.T) {
+	cache := feed.NewCache()
+	h := NewHandler(cache, nil)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected 200 OK, got %v", rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "No configuration available.") {
+		t.Errorf("expected body to contain 'No configuration available.', got %v", rr.Body.String())
+	}
+}
