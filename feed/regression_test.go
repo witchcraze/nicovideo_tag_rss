@@ -106,7 +106,7 @@ func TestCleanExpired_ZeroRetentionDays(t *testing.T) {
 	cf := &CachedFeed{
 		Videos: []nico.Video{
 			{ID: "sm1", PubDate: now},                          // 今日
-			{ID: "sm2", PubDate: now.Add(-24 * time.Hour)},    // 1日前
+			{ID: "sm2", PubDate: now.Add(-24 * time.Hour)},     // 1日前
 			{ID: "sm3", PubDate: now.Add(-7 * 24 * time.Hour)}, // 7日前
 		},
 	}
