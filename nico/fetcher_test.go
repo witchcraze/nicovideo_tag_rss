@@ -438,3 +438,43 @@ func TestFetchByTag_Non200Status(t *testing.T) {
 		t.Errorf("expected 1 HTTP call (no retry on 4xx), got %d", mock.callCount)
 	}
 }
+
+// 1ページ目は成功、2ページ目は500を返してエラーになるモック
+type MockErrorOnPage2RoundTripper struct {
+	callCount int
+}
+
+func (m *MockErrorOnPage2RoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	m.callCount++
+	page := req.URL.Query().Get("page")
+	// 500はリトライされるため、MockRoundTripperのように毎回500を返すか、
+	// またはリトライ回数を超えて500を返し続ける設定が必要だが、
+	// ここでは単純に2ページ目のリクエストに対して常に500を返す。
+	if page == "2" {
+		return &http.Response{StatusCode: 500, Body: io.NopCloser(strings.NewReader(""))}, nil
+	}
+	// page 1: 正常レスポンス
+	body := `<meta name="server-response" content="{&quot;data&quot;:{&quot;response&quot;:{&quot;$getSearchVideoV2&quot;:{&quot;data&quot;:{&quot;items&quot;:[{&quot;id&quot;:&quot;sm1&quot;,&quot;title&quot;:&quot;Video 1&quot;,&quot;registeredAt&quot;:&quot;2024-01-01T12:00:00+09:00&quot;,&quot;count&quot;:{&quot;view&quot;:100},&quot;thumbnail&quot;:{&quot;url&quot;:&quot;http://example.com/1&quot;}}]}}}}}}"/>`
+	return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body))}, nil
+}
+
+func TestFetchByTag_FetchPageError(t *testing.T) {
+	mock := &MockErrorOnPage2RoundTripper{}
+	// リトライ間隔を短くする
+	retryClient := NewRetryableClient(&http.Client{Transport: mock})
+	retryClient.initialBackoff = time.Millisecond
+	retryClient.maxRetries = 1 // 高速化のため
+
+	fetcher := &htmlFetcher{
+		client:   retryClient,
+		maxPages: 3, // 3ページまで取得しようとするが2ページ目で失敗する
+	}
+
+	_, err := fetcher.FetchByTag(context.Background(), "test", "registeredAt")
+	if err == nil {
+		t.Error("expected error when page fetch fails")
+	}
+	if err != nil && !strings.Contains(err.Error(), "failed to fetch page 2") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
