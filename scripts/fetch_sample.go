@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 )
@@ -15,10 +16,11 @@ func main() {
 	}
 	tag := os.Args[1]
 
-	url := fmt.Sprintf("https://www.nicovideo.jp/tag/%s?sort=registeredAt&order=desc", tag)
-	log.Printf("Fetching URL: %s", url)
+	escapedTag := url.QueryEscape(tag)
+	urlPath := fmt.Sprintf("https://www.nicovideo.jp/tag/%s?sort=registeredAt&order=desc", escapedTag)
+	log.Printf("Fetching URL: %s", urlPath)
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest("GET", urlPath, nil)
 	if err != nil {
 		log.Fatalf("Failed to create request: %v", err)
 	}
@@ -45,7 +47,8 @@ func main() {
 		log.Fatalf("Failed to create dir: %v", err)
 	}
 
-	filename := filepath.Join(outDir, fmt.Sprintf("raw_%s.html", tag))
+	safeTagForPath := filepath.Base(filepath.Clean(tag))
+	filename := filepath.Join(outDir, fmt.Sprintf("raw_%s.html", safeTagForPath))
 	if err := os.WriteFile(filename, body, 0644); err != nil {
 		log.Fatalf("Failed to write file: %v", err)
 	}
