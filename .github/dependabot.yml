@@ -12,7 +12,6 @@ updates:
       - "witchcraze"
     commit-message:
       prefix: "chore"
-      prefix-scope: "deps"
       include: "scope"
 
   # GitHub Actions updates
@@ -27,5 +26,4 @@ updates:
       - "witchcraze"
     commit-message:
       prefix: "chore"
-      prefix-scope: "ci"
       include: "scope"
