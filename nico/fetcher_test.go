@@ -453,8 +453,8 @@ func (m *MockErrorOnPage2RoundTripper) RoundTrip(req *http.Request) (*http.Respo
 	if page == "2" {
 		return &http.Response{StatusCode: 500, Body: io.NopCloser(strings.NewReader(""))}, nil
 	}
-	// page 1: 正常レスポンス
-	body := `<meta name="server-response" content="{&quot;data&quot;:{&quot;response&quot;:{&quot;$getSearchVideoV2&quot;:{&quot;data&quot;:{&quot;items&quot;:[{&quot;id&quot;:&quot;sm1&quot;,&quot;title&quot;:&quot;Video 1&quot;,&quot;registeredAt&quot;:&quot;2024-01-01T12:00:00+09:00&quot;,&quot;count&quot;:{&quot;view&quot;:100},&quot;thumbnail&quot;:{&quot;url&quot;:&quot;http://example.com/1&quot;}}]}}}}}}"/>`
+	// page 1: 正常レスポンス (1件以上返さないとページ2が取得されない)
+	body := `<meta name="server-response" content="{&quot;data&quot;:{&quot;response&quot;:{&quot;$getSearchVideoV2&quot;:{&quot;data&quot;:{&quot;items&quot;:[{&quot;id&quot;:&quot;sm1&quot;,&quot;title&quot;:&quot;Video 1&quot;,&quot;registeredAt&quot;:&quot;2024-01-01T12:00:00+09:00&quot;,&quot;shortDescription&quot;:&quot;&quot;,&quot;thumbnail&quot;:{&quot;url&quot;:&quot;&quot;},&quot;owner&quot;:{&quot;name&quot;:&quot;&quot;}}]}}}}}"/>`
 	return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body))}, nil
 }
 
