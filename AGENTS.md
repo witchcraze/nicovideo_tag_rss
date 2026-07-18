@@ -44,13 +44,40 @@
 - **単体テスト**:
   - ビジネスロジック、設定のバリデーション、キャッシュ、RSS 生成、HTML パースは、入力・出力を明示した `*_test.go` で検証します。
   - 正常系だけでなく、空入力、重複、境界値、失敗時に既存キャッシュを維持することを検証します。
+  - 各モジュールは**間接テスト（上位層経由）だけでなく直接ユニットテスト**も追加します。例えば `GenerateRSS` は `aggregator` 経由だけでなく `feed/rss_test.go` として単体で検証します。
 - **HTTP ハンドラーのテスト**:
   - `httptest` を使い、ステータスコード、レスポンス形式、ETag を含む主要な HTTP の振る舞いを検証します。
+  - `handleIndex` のような catch-all ハンドラーでは、**登録済みパス・未登録パス・設定が nil の場合**の全分岐を検証します。
 - **外部通信の扱い**:
   - 通常の自動テストはネットワークに依存させません。ニコニコ動画の検索結果はローカルの HTML フィクスチャで検証し、HTTP クライアントはモックまたはテスト用 Transport に差し替えます。
   - 実サイトへのアクセスは、必要な場合だけ開発者が明示的に実行する確認用スクリプトで行います。
-- **回帰テスト**:
-  - 不具合を修正する場合は、修正前に再現するテストを追加し、そのテストを通すことで再発を防ぎます。
+- **`MockRoundTripper` の正しい使い方** (`nico/fetcher_test.go` 内):
+  - `failTimes` を設定しない（または `0`）の場合、最初のリクエストから即 200 を返します。
+  - **特定のステータスコードを確実に返したい場合は `failTimes: 10` など大きな値を設定**します（`callCount <= failTimes` の間は `statusCode` を返し、それ以降は 200 を返す実装のため）。
+  - 4xx (例: 404, 403) は `RetryableClient` がリトライしないため、`failTimes: 10` を設定すると常に1回で終了し指定のステータスが返ります。
+  - 5xx はリトライ対象なので、最終的に 200 を返させたい場合は `failTimes` でリトライ回数を制御します。
+- **`RetryableClient` のリトライ仕様とテスト**:
+  - ネットワークエラー・5xx のみリトライ対象、**4xx は非リトライ**であることをテストで明示します。
+  - 最大5回試行（初回 + 4リトライ）を超えた場合はエラーを返すことを確認します。
+  - 連続リクエスト間の最低1秒インターバルも検証します。
+- **`parseHTML` のエラーケース**:
+  - `meta[name='server-response']` タグが存在しない HTML → エラーを返すこと
+  - `content` 属性の JSON が不正 → `"failed to parse json"` を含むエラーを返すこと
+  - `registeredAt` が不正な日時フォーマット → `time.Now()` にフォールバックすること（`PubDate` が1分以内であることで検証）
+- **`CleanExpired` の境界値**:
+  - `retentionDays=0` の場合、`cutoff ≈ now` となり今日投稿の動画も含め全動画が削除されます。この仕様をテストで固定します。
+  - 存在しない feed 名を指定してもパニックしないことを確認します。
+- **`config` のデフォルト値とフォールバック**:
+  - `update_interval` が 60m 未満 → 60m にクランプ（境界値 59m / 60m / 120m を含む）
+  - `video_retention_days <= 0` → 7 にフォールバック
+  - `max_pages <= 0` → 1 にフォールバック
+  - これらは**回帰テスト**として `config/regression_test.go` に固定します。
+- **Aggregator の回帰テスト**:
+  - 複数 sorts × 複数 tags の全組み合わせで `FetchByTag` が呼ばれること（外側ループ: sorts、内側ループ: tags）
+  - 複数 sorts から同一 ID の動画が返った場合に重複排除され1件になること
+  - フェッチエラー時に ETag を含む既存キャッシュが完全に保持されること
+- **回帰テストの配置**:
+  - 既知の境界条件・不具合の再発防止テストは `*_test.go` に混在させず、各パッケージに `regression_test.go` として分離します。意図が分かる命名（例: `TestLoadConfig_UpdateIntervalMinEnforced`）を付けます。
 - **CI の必須品質チェック**:
   - CI では `go build ./...`、`go vet ./...`、`go test -race`、`gofmt`、固定版 Staticcheck を実行します。
   - Docker イメージの build/push は、テストと Staticcheck の両方が成功した場合にだけ実行します。
@@ -173,7 +200,8 @@ graph TD
 ├── main.go              # エントリーポイント、初期化、サーバー起動
 ├── config/              # 設定ファイルのパースロジック
 │   ├── config.go
-│   └── config_test.go
+│   ├── config_test.go
+│   └── regression_test.go  # 境界値・デフォルト値の回帰テスト
 ├── nico/                # ニコニコ動画のデータ取得・パース
 │   ├── fetcher.go       # VideoFetcher インターフェースと具象実装
 │   ├── fetcher_test.go  # テストコード
@@ -182,7 +210,10 @@ graph TD
 │   ├── aggregator.go
 │   ├── aggregator_test.go
 │   ├── cache.go
-│   └── cache_test.go
+│   ├── cache_test.go
+│   ├── regression_test.go  # Aggregator・Cache の回帰テスト
+│   ├── rss.go
+│   └── rss_test.go      # GenerateRSS の直接ユニットテスト
 └── server/              # HTTP ハンドラー
     ├── handler.go
     └── handler_test.go
