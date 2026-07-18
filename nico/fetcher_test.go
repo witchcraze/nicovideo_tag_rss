@@ -420,3 +420,21 @@ func TestParseHTML_InvalidDate(t *testing.T) {
 		t.Errorf("expected PubDate to be close to now, got %v", videos[0].PubDate)
 	}
 }
+
+func TestFetchByTag_Non200Status(t *testing.T) {
+	// 403 は 4xx なので RetryableClient はリトライせず、fetchPage の非200チェックに到達してエラーになる
+	mock := &MockRoundTripper{statusCode: 403, failTimes: 10}
+	client := &http.Client{Transport: mock}
+	fetcher := &htmlFetcher{
+		client:   NewRetryableClient(client),
+		maxPages: 1,
+	}
+
+	_, err := fetcher.FetchByTag(context.Background(), "tag", "registeredAt")
+	if err == nil {
+		t.Error("expected error on 403 status, got nil")
+	}
+	if mock.callCount != 1 {
+		t.Errorf("expected 1 HTTP call (no retry on 4xx), got %d", mock.callCount)
+	}
+}
