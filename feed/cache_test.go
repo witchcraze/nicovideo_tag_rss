@@ -158,3 +158,18 @@ func TestDumpToFileMalformed(t *testing.T) {
 		t.Error("expected error when loading malformed JSON")
 	}
 }
+
+func TestDumpToFile_WriteError(t *testing.T) {
+	cache := NewCache()
+	// 存在しないディレクトリへの書き込みでエラーになることを確認
+	err := cache.DumpToFile("/nonexistent/dir/cache.json")
+	if err == nil {
+		t.Error("expected error when writing to nonexistent path")
+	}
+}
+
+func TestCleanExpired_NonexistentFeed(t *testing.T) {
+	cache := NewCache()
+	// パニックせず正常終了することを確認（戻り値なし）
+	cache.CleanExpired("nonexistent_feed", 7)
+}
