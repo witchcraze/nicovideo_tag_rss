@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/witchcraze/nicovideo_tag_rss/metrics"
 )
 
 // RetryableClient wraps an HTTP client with retry logic using exponential backoff
@@ -58,8 +59,18 @@ func (r *RetryableClient) Do(ctx context.Context, req *http.Request) (*http.Resp
 
 		r.lastRequestTime = time.Now()
 
+		if attempt > 0 {
+			metrics.NicoRetryCount.Inc()
+		}
+
 		// Execute request
 		resp, err := r.client.Do(req)
+
+		status := "error"
+		if resp != nil {
+			status = fmt.Sprintf("%d", resp.StatusCode)
+		}
+		metrics.NicoRequestCount.WithLabelValues(status).Inc()
 
 		if err == nil && !r.isRetryable(resp, err) {
 			// Success or non-retryable error
@@ -207,17 +218,20 @@ type serverResponse struct {
 func (f *htmlFetcher) parseHTML(r io.Reader) ([]Video, error) {
 	doc, err := goquery.NewDocumentFromReader(r)
 	if err != nil {
+		metrics.HTMLParseCount.WithLabelValues("failure").Inc()
 		return nil, fmt.Errorf("failed to parse html: %w", err)
 	}
 
 	meta := doc.Find("meta[name='server-response']")
 	content, exists := meta.Attr("content")
 	if !exists {
+		metrics.HTMLParseCount.WithLabelValues("failure").Inc()
 		return nil, fmt.Errorf("meta[name='server-response'] not found")
 	}
 
 	var sResp serverResponse
 	if err := json.Unmarshal([]byte(content), &sResp); err != nil {
+		metrics.HTMLParseCount.WithLabelValues("failure").Inc()
 		return nil, fmt.Errorf("failed to parse json in meta tag: %w", err)
 	}
 
@@ -241,5 +255,6 @@ func (f *htmlFetcher) parseHTML(r io.Reader) ([]Video, error) {
 		})
 	}
 
+	metrics.HTMLParseCount.WithLabelValues("success").Inc()
 	return videos, nil
 }
