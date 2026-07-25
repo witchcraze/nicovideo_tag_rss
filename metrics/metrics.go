@@ -104,7 +104,7 @@ var (
 // WritePrometheusFormat writes all metrics in Prometheus text format
 func WritePrometheusFormat(w io.Writer) {
 	writeCounter(w, "nicovideo_rss_nico_retries_total", "Total number of retry attempts made to Nicovideo", NicoRetryCount.Get())
-	
+
 	writeCounterVec(w, HTTPRequestCount)
 	writeCounterVec(w, HTMLParseCount)
 	writeCounterVec(w, NicoRequestCount)
@@ -127,7 +127,7 @@ func writeCounterVec(w io.Writer, cv *CounterVec) {
 	}
 	fmt.Fprintf(w, "# HELP %s %s\n", cv.name, cv.help)
 	fmt.Fprintf(w, "# TYPE %s counter\n", cv.name)
-	
+
 	for key, c := range cv.counts {
 		lvs := strings.Split(key, ",")
 		labelStr := formatLabels(cv.labels, lvs)
