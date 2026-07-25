@@ -138,3 +138,21 @@ func TestHandler_Index_NilConfig(t *testing.T) {
 		t.Errorf("expected body to contain 'No configuration available.', got %v", rr.Body.String())
 	}
 }
+
+func TestHandler_Metrics(t *testing.T) {
+	cache := feed.NewCache()
+	h := NewHandler(cache, nil)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	req := httptest.NewRequest("GET", "/metrics", nil)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected 200 OK, got %d", rr.Code)
+	}
+	if ct := rr.Header().Get("Content-Type"); ct != "text/plain; version=0.0.4; charset=utf-8" {
+		t.Errorf("unexpected Content-Type: %q", ct)
+	}
+}
