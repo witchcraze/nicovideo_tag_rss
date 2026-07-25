@@ -13,7 +13,7 @@ scrape_configs:
   - job_name: 'nicovideo_tag_rss'
     scrape_interval: 15s
     static_configs:
-      - targets: ['localhost:8080'] # アプリケーションのアドレスに合わせて変更してください
+      - targets: ['localhost:8080'] # ホスト:ポートのみ指定。Prometheusが自動で /metrics にアクセスします
 ```
 
 ## 2. Grafana でのダッシュボード作成
