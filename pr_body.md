@@ -1,11 +1,14 @@
 ## 関連Issue
-Fixes #49
+Fixes #63
 
 ## 変更内容
-`nico/fetcher_test.go` に、複数ページの取得途中でエラーが発生した場合のテストを追加しました。
-- `TestFetchByTag_FetchPageError`: 2ページ目の取得時にエラー(500)を返すモック (`MockErrorOnPage2RoundTripper`) を用意し、`FetchByTag` が途中で取得に失敗した場合に適切なエラー（`failed to fetch page 2`）を返すことを確認。
+`feed.GenerateRSS` を直接呼び出していた箇所を、`RSSGenerator` インターフェースを介すようにリファクタリングしました。
+- `feed/rss.go`: `RSSGenerator` インターフェースと `DefaultRSSGenerator` 実装を追加。
+- `feed/aggregator.go`: `NewAggregator` でジェネレーターを受け取れるように変更。省略時はデフォルト実装を使用。
+- `feed/aggregator_test.go`: `mockRSSGenerator` を使って、RSSの生成に失敗した場合でも古いキャッシュが保持され、エラーを返すことをテスト (`TestAggregator_Update_RSSGenerationError`) 。
+- 各種テストや `main.go` の修正。
 
 ## セルフレビュー用チェックリスト
-- [x] TDDとテスト網羅性: 追加したテストが期待通りに失敗し、修正後にパスすることを確認しました（※今回はテスト追加のみ）
-- [x] コード品質とエラーハンドリング: モックを用いて通信エラー状態を再現し、適切にエラーがラップされていることを確認しました
-- [x] 設計方針への準拠: 既存のモックパターンに倣って実装しました
+- [x] TDDとテスト網羅性: 既存のテストに加え、エラー時の挙動確認テストを追加しパスさせました
+- [x] コード品質とエラーハンドリング: DIによってテストコードの独立性を高めました
+- [x] 設計方針への準拠: インターフェースベースの設計に揃えています
