@@ -122,6 +122,33 @@ feeds:
 	}
 }
 
+func TestLoadConfig_FileNotFound(t *testing.T) {
+	_, err := LoadConfig("/nonexistent/path/to/config.yaml")
+	if err == nil {
+		t.Fatal("expected error when file does not exist, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to read config file") {
+		t.Errorf("expected 'failed to read config file' in error, got: %v", err)
+	}
+}
+
+func TestLoadConfig_InvalidYAML(t *testing.T) {
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "config.yaml")
+	// インデントが壊れた不正 YAML
+	if err := os.WriteFile(configFile, []byte("feeds:\n  - name: test\n invalid_indent"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	_, err := LoadConfig(configFile)
+	if err == nil {
+		t.Fatal("expected error when YAML is invalid, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to parse yaml") {
+		t.Errorf("expected 'failed to parse yaml' in error, got: %v", err)
+	}
+}
+
 func TestLoadConfig_Validation(t *testing.T) {
 	tests := []struct {
 		name        string
