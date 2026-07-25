@@ -108,7 +108,7 @@ func TestE2E_ApplicationFlow(t *testing.T) {
 	mockRT.shouldFail = true
 	// To speed up retries during test, we can set shorter backoff on client if we want
 	// But our mockRT always fails anyway.
-	
+
 	// Run update again
 	updateFeeds(ctx, cfg, aggregator, cache)
 
