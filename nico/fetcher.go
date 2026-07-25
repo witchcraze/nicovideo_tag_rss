@@ -65,7 +65,7 @@ func (r *RetryableClient) Do(ctx context.Context, req *http.Request) (*http.Resp
 
 		// Execute request
 		resp, err := r.client.Do(req)
-		
+
 		status := "error"
 		if resp != nil {
 			status = fmt.Sprintf("%d", resp.StatusCode)
@@ -258,4 +258,3 @@ func (f *htmlFetcher) parseHTML(r io.Reader) ([]Video, error) {
 	metrics.HTMLParseCount.WithLabelValues("success").Inc()
 	return videos, nil
 }
-

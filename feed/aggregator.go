@@ -92,4 +92,3 @@ func (a *Aggregator) Update(ctx context.Context, feedName string, cfg config.Fee
 	metrics.FeedUpdateCount.WithLabelValues(feedName, "success").Inc()
 	return nil
 }
-
