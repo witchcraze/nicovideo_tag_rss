@@ -5,8 +5,10 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/witchcraze/nicovideo_tag_rss/config"
 	"github.com/witchcraze/nicovideo_tag_rss/feed"
+	"github.com/witchcraze/nicovideo_tag_rss/metrics"
 )
 
 // Handler handles HTTP requests.
@@ -23,11 +25,30 @@ func NewHandler(cache *feed.Cache, cfg *config.Config) *Handler {
 	}
 }
 
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (r *statusRecorder) WriteHeader(code int) {
+	r.status = code
+	r.ResponseWriter.WriteHeader(code)
+}
+
+func (h *Handler) instrument(endpoint string, f http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+		f(recorder, r)
+		metrics.HTTPRequestCount.WithLabelValues(endpoint, fmt.Sprintf("%d", recorder.status)).Inc()
+	}
+}
+
 // RegisterRoutes registers endpoints on the provided ServeMux.
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /healthz", h.handleHealthz)
-	mux.HandleFunc("GET /feed/{name}", h.handleFeed)
-	mux.HandleFunc("GET /", h.handleIndex)
+	mux.HandleFunc("GET /healthz", h.instrument("healthz", h.handleHealthz))
+	mux.HandleFunc("GET /feed/{name}", h.instrument("feed", h.handleFeed))
+	mux.HandleFunc("GET /", h.instrument("index", h.handleIndex))
+	mux.Handle("GET /metrics", promhttp.Handler())
 }
 
 func (h *Handler) handleHealthz(w http.ResponseWriter, r *http.Request) {
@@ -41,17 +62,20 @@ func (h *Handler) handleFeed(w http.ResponseWriter, r *http.Request) {
 
 	cf, ok := h.cache.Get(name)
 	if !ok || cf == nil {
+		metrics.CacheHitCount.WithLabelValues("miss").Inc()
 		http.Error(w, "Feed not found", http.StatusNotFound)
 		return
 	}
 
 	if match := r.Header.Get("If-None-Match"); match != "" {
 		if match == cf.ETag {
+			metrics.CacheHitCount.WithLabelValues("not_modified").Inc()
 			w.WriteHeader(http.StatusNotModified)
 			return
 		}
 	}
 
+	metrics.CacheHitCount.WithLabelValues("hit").Inc()
 	w.Header().Set("Content-Type", "application/rss+xml; charset=utf-8")
 	w.Header().Set("ETag", cf.ETag)
 	w.Write(cf.RSSXML)

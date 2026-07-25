@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/witchcraze/nicovideo_tag_rss/config"
+	"github.com/witchcraze/nicovideo_tag_rss/metrics"
 	"github.com/witchcraze/nicovideo_tag_rss/nico"
 )
 
@@ -36,6 +37,11 @@ func NewAggregator(fetcher nico.VideoFetcher, cache *Cache, rssGen RSSGenerator)
 // merges, deduplicates, sorts by PubDate desc, and updates the cache.
 // If a fetch error occurs, the old cache is preserved.
 func (a *Aggregator) Update(ctx context.Context, feedName string, cfg config.FeedConfig) error {
+	start := time.Now()
+	defer func() {
+		metrics.FeedUpdateDuration.WithLabelValues(feedName).Observe(time.Since(start).Seconds())
+	}()
+
 	var allVideos []nico.Video
 
 	for _, sortCfg := range cfg.Sorts {
@@ -43,6 +49,7 @@ func (a *Aggregator) Update(ctx context.Context, feedName string, cfg config.Fee
 			videos, err := a.fetcher.FetchByTag(ctx, tag, sortCfg.Sort)
 			if err != nil {
 				slog.Error("failed to fetch videos", "tag", tag, "feed", feedName, "sort", sortCfg.Sort, "error", err)
+				metrics.FeedUpdateCount.WithLabelValues(feedName, "failure").Inc()
 				return err
 			}
 			allVideos = append(allVideos, videos...)
@@ -68,6 +75,7 @@ func (a *Aggregator) Update(ctx context.Context, feedName string, cfg config.Fee
 	rssXML, err := a.rssGen.Generate(cfg, mergedVideos)
 	if err != nil {
 		slog.Error("failed to generate RSS", "feed", feedName, "error", err)
+		metrics.FeedUpdateCount.WithLabelValues(feedName, "failure").Inc()
 		return err
 	}
 
@@ -81,5 +89,7 @@ func (a *Aggregator) Update(ctx context.Context, feedName string, cfg config.Fee
 		ETag:        eTag,
 	})
 
+	metrics.FeedUpdateCount.WithLabelValues(feedName, "success").Inc()
 	return nil
 }
+

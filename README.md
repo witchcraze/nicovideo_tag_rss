@@ -123,6 +123,8 @@ docker compose up -d
   - キャッシュされたデータを返すため高速かつ安定しています。
 - `GET /healthz`
   - ヘルスチェック用エンドポイント（200 OK）です。
+- `GET /metrics`
+  - Prometheus用のメトリクスを返すエンドポイントです。PrometheusやGrafanaを使った監視の設定方法は、[監視ダッシュボードの設定 (docs/grafana.md)](docs/grafana.md) を参照してください。
 
 ## 開発 (Development)
 
