@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/witchcraze/nicovideo_tag_rss/config"
 	"github.com/witchcraze/nicovideo_tag_rss/feed"
 	"github.com/witchcraze/nicovideo_tag_rss/metrics"
@@ -48,7 +47,10 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /healthz", h.instrument("healthz", h.handleHealthz))
 	mux.HandleFunc("GET /feed/{name}", h.instrument("feed", h.handleFeed))
 	mux.HandleFunc("GET /", h.instrument("index", h.handleIndex))
-	mux.Handle("GET /metrics", promhttp.Handler())
+	mux.HandleFunc("GET /metrics", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+		metrics.WritePrometheusFormat(w)
+	})
 }
 
 func (h *Handler) handleHealthz(w http.ResponseWriter, r *http.Request) {

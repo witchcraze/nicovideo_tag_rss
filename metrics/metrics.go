@@ -1,69 +1,163 @@
 package metrics
 
 import (
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
+	"fmt"
+	"io"
+	"strings"
+	"sync"
+	"sync/atomic"
 )
+
+type Counter struct {
+	val atomic.Uint64
+}
+
+func (c *Counter) Inc() {
+	c.val.Add(1)
+}
+func (c *Counter) Get() uint64 {
+	return c.val.Load()
+}
+
+type CounterVec struct {
+	mu     sync.RWMutex
+	counts map[string]*Counter
+	name   string
+	help   string
+	labels []string
+}
+
+func NewCounterVec(name, help string, labels ...string) *CounterVec {
+	return &CounterVec{
+		counts: make(map[string]*Counter),
+		name:   name,
+		help:   help,
+		labels: labels,
+	}
+}
+
+func (cv *CounterVec) WithLabelValues(lvs ...string) *Counter {
+	key := strings.Join(lvs, ",")
+	cv.mu.RLock()
+	if c, ok := cv.counts[key]; ok {
+		cv.mu.RUnlock()
+		return c
+	}
+	cv.mu.RUnlock()
+
+	cv.mu.Lock()
+	defer cv.mu.Unlock()
+	if c, ok := cv.counts[key]; ok {
+		return c
+	}
+	c := &Counter{}
+	cv.counts[key] = c
+	return c
+}
+
+type HistogramVec struct {
+	mu     sync.RWMutex
+	sums   map[string]float64
+	counts map[string]uint64
+	name   string
+	help   string
+	labels []string
+}
+
+func NewHistogramVec(name, help string, labels ...string) *HistogramVec {
+	return &HistogramVec{
+		sums:   make(map[string]float64),
+		counts: make(map[string]uint64),
+		name:   name,
+		help:   help,
+		labels: labels,
+	}
+}
+
+type HistogramVecObserver struct {
+	hv  *HistogramVec
+	key string
+}
+
+func (ho *HistogramVecObserver) Observe(v float64) {
+	ho.hv.mu.Lock()
+	defer ho.hv.mu.Unlock()
+	ho.hv.sums[ho.key] += v
+	ho.hv.counts[ho.key]++
+}
+
+func (hv *HistogramVec) WithLabelValues(lvs ...string) *HistogramVecObserver {
+	key := strings.Join(lvs, ",")
+	return &HistogramVecObserver{hv: hv, key: key}
+}
 
 var (
-	// HTTP Requests
-	HTTPRequestCount = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "nicovideo_rss_http_requests_total",
-			Help: "Total number of HTTP requests by endpoint and status code",
-		},
-		[]string{"endpoint", "status"},
-	)
-
-	// HTML Parse
-	HTMLParseCount = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "nicovideo_rss_html_parse_total",
-			Help: "Total number of HTML parses by status (success/failure)",
-		},
-		[]string{"status"}, // "success", "failure"
-	)
-
-	// Nicovideo Requests
-	NicoRequestCount = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "nicovideo_rss_nico_requests_total",
-			Help: "Total number of requests to Nicovideo by status code",
-		},
-		[]string{"status"},
-	)
-
-	NicoRetryCount = promauto.NewCounter(
-		prometheus.CounterOpts{
-			Name: "nicovideo_rss_nico_retries_total",
-			Help: "Total number of retry attempts made to Nicovideo",
-		},
-	)
-
-	// RSS Cache Hit/Miss
-	CacheHitCount = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "nicovideo_rss_cache_hits_total",
-			Help: "Total number of cache hits and misses",
-		},
-		[]string{"status"}, // "hit", "miss", "not_modified"
-	)
-
-	// RSS Feed Updates
-	FeedUpdateCount = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "nicovideo_rss_feed_updates_total",
-			Help: "Total number of feed updates by feed name and status",
-		},
-		[]string{"feed", "status"}, // "success", "failure"
-	)
-
-	FeedUpdateDuration = promauto.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Name:    "nicovideo_rss_feed_update_duration_seconds",
-			Help:    "Duration of feed updates in seconds",
-			Buckets: prometheus.DefBuckets,
-		},
-		[]string{"feed"},
-	)
+	HTTPRequestCount   = NewCounterVec("nicovideo_rss_http_requests_total", "Total HTTP requests by endpoint and status code", "endpoint", "status")
+	HTMLParseCount     = NewCounterVec("nicovideo_rss_html_parse_total", "Total number of HTML parses by status", "status")
+	NicoRequestCount   = NewCounterVec("nicovideo_rss_nico_requests_total", "Total number of requests to Nicovideo by status code", "status")
+	NicoRetryCount     = &Counter{}
+	CacheHitCount      = NewCounterVec("nicovideo_rss_cache_hits_total", "Total number of cache hits and misses", "status")
+	FeedUpdateCount    = NewCounterVec("nicovideo_rss_feed_updates_total", "Total number of feed updates by feed name and status", "feed", "status")
+	FeedUpdateDuration = NewHistogramVec("nicovideo_rss_feed_update_duration_seconds", "Duration of feed updates in seconds", "feed")
 )
+
+// WritePrometheusFormat writes all metrics in Prometheus text format
+func WritePrometheusFormat(w io.Writer) {
+	writeCounter(w, "nicovideo_rss_nico_retries_total", "Total number of retry attempts made to Nicovideo", NicoRetryCount.Get())
+	
+	writeCounterVec(w, HTTPRequestCount)
+	writeCounterVec(w, HTMLParseCount)
+	writeCounterVec(w, NicoRequestCount)
+	writeCounterVec(w, CacheHitCount)
+	writeCounterVec(w, FeedUpdateCount)
+	writeHistogramVec(w, FeedUpdateDuration)
+}
+
+func writeCounter(w io.Writer, name, help string, val uint64) {
+	fmt.Fprintf(w, "# HELP %s %s\n", name, help)
+	fmt.Fprintf(w, "# TYPE %s counter\n", name)
+	fmt.Fprintf(w, "%s %d\n", name, val)
+}
+
+func writeCounterVec(w io.Writer, cv *CounterVec) {
+	cv.mu.RLock()
+	defer cv.mu.RUnlock()
+	if len(cv.counts) == 0 {
+		return
+	}
+	fmt.Fprintf(w, "# HELP %s %s\n", cv.name, cv.help)
+	fmt.Fprintf(w, "# TYPE %s counter\n", cv.name)
+	
+	for key, c := range cv.counts {
+		lvs := strings.Split(key, ",")
+		labelStr := formatLabels(cv.labels, lvs)
+		fmt.Fprintf(w, "%s{%s} %d\n", cv.name, labelStr, c.Get())
+	}
+}
+
+func writeHistogramVec(w io.Writer, hv *HistogramVec) {
+	hv.mu.RLock()
+	defer hv.mu.RUnlock()
+	if len(hv.counts) == 0 {
+		return
+	}
+	fmt.Fprintf(w, "# HELP %s %s\n", hv.name, hv.help)
+	// We expose sum and count, not full histogram buckets to keep it simple.
+	fmt.Fprintf(w, "# TYPE %s_sum counter\n", hv.name)
+	for key := range hv.counts {
+		lvs := strings.Split(key, ",")
+		labelStr := formatLabels(hv.labels, lvs)
+		fmt.Fprintf(w, "%s_sum{%s} %f\n", hv.name, labelStr, hv.sums[key])
+		fmt.Fprintf(w, "%s_count{%s} %d\n", hv.name, labelStr, hv.counts[key])
+	}
+}
+
+func formatLabels(names, values []string) string {
+	var parts []string
+	for i := range names {
+		if i < len(values) {
+			parts = append(parts, fmt.Sprintf(`%s="%s"`, names[i], values[i]))
+		}
+	}
+	return strings.Join(parts, ",")
+}
