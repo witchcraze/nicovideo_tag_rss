@@ -125,6 +125,11 @@ func (f *htmlFetcher) SetMaxPages(maxPages int) {
 	f.maxPages = maxPages
 }
 
+// SetClient sets a custom HTTP client (useful for testing)
+func (f *htmlFetcher) SetClient(c *http.Client) {
+	f.client = NewRetryableClient(c)
+}
+
 // FetchByTag fetches videos for a given tag across multiple pages.
 func (f *htmlFetcher) FetchByTag(ctx context.Context, tag string, sort string) ([]Video, error) {
 	var allVideos []Video

@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/witchcraze/nicovideo_tag_rss/config"
 	"github.com/witchcraze/nicovideo_tag_rss/feed"
@@ -36,6 +37,7 @@ func (h *Handler) handleHealthz(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) handleFeed(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
+	name = strings.TrimSuffix(name, ".xml")
 
 	cf, ok := h.cache.Get(name)
 	if !ok || cf == nil {
