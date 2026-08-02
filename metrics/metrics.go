@@ -140,11 +140,11 @@ func (hv *HistogramVec) WithLabelValues(lvs ...string) *HistogramVecObserver {
 }
 
 var (
-	HTTPRequestCount   = NewCounterVec("nicovideo_rss_http_requests_total", "Total HTTP requests by endpoint and status code", "endpoint", "status")
-	HTMLParseCount     = NewCounterVec("nicovideo_rss_html_parse_total", "Total number of HTML parses by status", "status")
-	NicoRequestCount   = NewCounterVec("nicovideo_rss_nico_requests_total", "Total number of requests to Nicovideo by status code", "status")
-	NicoRetryCount     = &Counter{}
-	CacheHitCount      = NewCounterVec("nicovideo_rss_cache_hits_total", "Total number of cache hits and misses", "status")
+	HTTPRequestCount        = NewCounterVec("nicovideo_rss_http_requests_total", "Total HTTP requests by endpoint and status code", "endpoint", "status")
+	HTMLParseCount          = NewCounterVec("nicovideo_rss_html_parse_total", "Total number of HTML parses by status", "status")
+	NicoRequestCount        = NewCounterVec("nicovideo_rss_nico_requests_total", "Total number of requests to Nicovideo by status code", "status")
+	NicoRetryCount          = &Counter{}
+	CacheHitCount           = NewCounterVec("nicovideo_rss_cache_hits_total", "Total number of cache hits and misses", "status")
 	FeedUpdateCount         = NewCounterVec("nicovideo_rss_feed_updates_total", "Total number of feed updates by feed name and status", "feed", "status")
 	FeedUpdateDuration      = NewHistogramVec("nicovideo_rss_feed_update_duration_seconds", "Duration of feed updates in seconds", "feed")
 	FeedLastUpdateTimestamp = NewGaugeVec("nicovideo_rss_feed_last_update_timestamp_seconds", "Timestamp of the last feed update in seconds since epoch", "feed")
