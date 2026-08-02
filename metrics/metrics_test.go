@@ -235,11 +235,11 @@ func TestWritePrometheusFormat_Integration_WithData(t *testing.T) {
 	// Increment global counters
 	HTTPRequestCount.WithLabelValues("/test", "200").Inc()
 	NicoRetryCount.Inc()
-	
+
 	var buf strings.Builder
 	WritePrometheusFormat(&buf)
 	out := buf.String()
-	
+
 	if !strings.Contains(out, `nicovideo_rss_http_requests_total{endpoint="/test",status="200"}`) {
 		t.Errorf("Missing HTTPRequestCount metric in output: %s", out)
 	}
