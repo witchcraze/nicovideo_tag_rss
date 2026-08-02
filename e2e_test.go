@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -128,5 +129,53 @@ func TestE2E_ApplicationFlow(t *testing.T) {
 
 	if !strings.Contains(bodyStr2, "E2E Test Video") {
 		t.Errorf("expected video title in cache to be protected, but not found")
+	}
+
+	// 8. Test ETag / If-None-Match (304 Scenario)
+	etag := resp.Header.Get("ETag")
+	if etag == "" {
+		t.Fatalf("expected ETag header in response")
+	}
+	req3, _ := http.NewRequest("GET", ts.URL+"/feed/testfeed.xml", nil)
+	req3.Header.Set("If-None-Match", etag)
+	resp3, err := ts.Client().Do(req3)
+	if err != nil {
+		t.Fatalf("failed to GET feed with If-None-Match: %v", err)
+	}
+	defer resp3.Body.Close()
+	if resp3.StatusCode != http.StatusNotModified {
+		t.Fatalf("expected status 304, got %d", resp3.StatusCode)
+	}
+
+	// 9. Test GET /metrics Scenario
+	respMetrics, err := http.Get(ts.URL + "/metrics")
+	if err != nil {
+		t.Fatalf("failed to GET /metrics: %v", err)
+	}
+	defer respMetrics.Body.Close()
+	if respMetrics.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200 for /metrics, got %d", respMetrics.StatusCode)
+	}
+	metricsBytes, _ := io.ReadAll(respMetrics.Body)
+	metricsStr := string(metricsBytes)
+	if !strings.Contains(metricsStr, "nicovideo_rss_feed_updates_total") {
+		t.Errorf("expected metrics to contain nicovideo_rss_feed_updates_total, but not found")
+	}
+
+	// 10. Test Cache Persistence Round-Trip Scenario
+	cacheFilePath := filepath.Join(cfg.CacheDir, "cache.json")
+	if err := cache.DumpToFile(cacheFilePath); err != nil {
+		t.Fatalf("failed to dump cache to file: %v", err)
+	}
+	newCache := feed.NewCache()
+	if err := newCache.LoadFromFile(cacheFilePath); err != nil {
+		t.Fatalf("failed to load cache from file: %v", err)
+	}
+	cf3, ok := newCache.Get("testfeed")
+	if !ok || cf3 == nil {
+		t.Fatalf("expected to get testfeed from loaded cache")
+	}
+	if !strings.Contains(string(cf3.RSSXML), "E2E Test Video") {
+		t.Errorf("loaded cache RSS XML does not contain expected video title")
 	}
 }
