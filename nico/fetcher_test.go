@@ -478,3 +478,59 @@ func TestFetchByTag_FetchPageError(t *testing.T) {
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
+
+func TestRetryableClient_IsRetryable(t *testing.T) {
+	client := NewRetryableClient(&http.Client{})
+
+	tests := []struct {
+		name       string
+		err        error
+		statusCode int
+		want       bool
+	}{
+		{"network error", errors.New("net err"), 200, true},
+		{"server error", nil, 500, true},
+		{"client error", nil, 404, false},
+		{"success", nil, 200, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp := &http.Response{StatusCode: tt.statusCode}
+			if got := client.isRetryable(resp, tt.err); got != tt.want {
+				t.Errorf("isRetryable() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHTMLFetcher_SetMaxPages(t *testing.T) {
+	fetcher := NewHTMLFetcher()
+
+	fetcher.SetMaxPages(5)
+	if fetcher.maxPages != 5 {
+		t.Errorf("SetMaxPages(5) = %d, want 5", fetcher.maxPages)
+	}
+
+	fetcher.SetMaxPages(0)
+	if fetcher.maxPages != 1 {
+		t.Errorf("SetMaxPages(0) = %d, want 1", fetcher.maxPages)
+	}
+
+	fetcher.SetMaxPages(-1)
+	if fetcher.maxPages != 1 {
+		t.Errorf("SetMaxPages(-1) = %d, want 1", fetcher.maxPages)
+	}
+}
+
+func TestFetchPage_InvalidURL(t *testing.T) {
+	fetcher := NewHTMLFetcher()
+
+	// Use nil context to trigger http.NewRequestWithContext error
+	_, err := fetcher.fetchPage(nil, "tag", "sort", 1)
+	if err == nil {
+		t.Error("expected error with nil context, got nil")
+	} else if !strings.Contains(err.Error(), "failed to create request") {
+		t.Errorf("expected 'failed to create request' error, got: %v", err)
+	}
+}
