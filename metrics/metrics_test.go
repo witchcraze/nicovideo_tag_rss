@@ -221,3 +221,49 @@ func TestWriteHistogramVec_WithEntries(t *testing.T) {
 		t.Errorf("missing feed label in: %s", out)
 	}
 }
+
+func TestWritePrometheusFormat_Integration_Empty(t *testing.T) {
+	var buf strings.Builder
+	WritePrometheusFormat(&buf)
+	out := buf.String()
+	if !strings.Contains(out, "nicovideo_rss_nico_retries_total") {
+		t.Errorf("Expected output to contain nicovideo_rss_nico_retries_total, got: %s", out)
+	}
+}
+
+func TestWritePrometheusFormat_Integration_WithData(t *testing.T) {
+	// Increment global counters
+	HTTPRequestCount.WithLabelValues("/test", "200").Inc()
+	NicoRetryCount.Inc()
+	
+	var buf strings.Builder
+	WritePrometheusFormat(&buf)
+	out := buf.String()
+	
+	if !strings.Contains(out, `nicovideo_rss_http_requests_total{endpoint="/test",status="200"}`) {
+		t.Errorf("Missing HTTPRequestCount metric in output: %s", out)
+	}
+	if !strings.Contains(out, "nicovideo_rss_nico_retries_total") {
+		t.Errorf("Missing NicoRetryCount metric in output: %s", out)
+	}
+}
+
+func TestCounterVec_WithLabelValues_DoubleCheckLock(t *testing.T) {
+	// We want to force multiple goroutines to hit the lock block simultaneously.
+	// Since we can't deterministically pause goroutines at exactly the right spot,
+	// we run this many times to ensure the race condition occurs and covers the double check lock.
+	for try := 0; try < 10000; try++ {
+		cv := NewCounterVec("test_double_check", "help", "label")
+		var wg sync.WaitGroup
+		const goroutines = 10
+		wg.Add(goroutines)
+
+		for i := 0; i < goroutines; i++ {
+			go func() {
+				defer wg.Done()
+				cv.WithLabelValues("race_key").Inc()
+			}()
+		}
+		wg.Wait()
+	}
+}
