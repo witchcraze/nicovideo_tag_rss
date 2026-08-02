@@ -90,5 +90,6 @@ func (a *Aggregator) Update(ctx context.Context, feedName string, cfg config.Fee
 	})
 
 	metrics.FeedUpdateCount.WithLabelValues(feedName, "success").Inc()
+	metrics.FeedLastUpdateTimestamp.WithLabelValues(feedName).Set(time.Now().Unix())
 	return nil
 }

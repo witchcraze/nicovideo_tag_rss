@@ -55,6 +55,54 @@ func (cv *CounterVec) WithLabelValues(lvs ...string) *Counter {
 	return c
 }
 
+type Gauge struct {
+	val atomic.Int64
+}
+
+func (g *Gauge) Set(v int64) {
+	g.val.Store(v)
+}
+
+func (g *Gauge) Get() int64 {
+	return g.val.Load()
+}
+
+type GaugeVec struct {
+	mu     sync.RWMutex
+	gauges map[string]*Gauge
+	name   string
+	help   string
+	labels []string
+}
+
+func NewGaugeVec(name, help string, labels ...string) *GaugeVec {
+	return &GaugeVec{
+		gauges: make(map[string]*Gauge),
+		name:   name,
+		help:   help,
+		labels: labels,
+	}
+}
+
+func (gv *GaugeVec) WithLabelValues(lvs ...string) *Gauge {
+	key := strings.Join(lvs, ",")
+	gv.mu.RLock()
+	if g, ok := gv.gauges[key]; ok {
+		gv.mu.RUnlock()
+		return g
+	}
+	gv.mu.RUnlock()
+
+	gv.mu.Lock()
+	defer gv.mu.Unlock()
+	if g, ok := gv.gauges[key]; ok {
+		return g
+	}
+	g := &Gauge{}
+	gv.gauges[key] = g
+	return g
+}
+
 type HistogramVec struct {
 	mu     sync.RWMutex
 	sums   map[string]float64
@@ -92,13 +140,14 @@ func (hv *HistogramVec) WithLabelValues(lvs ...string) *HistogramVecObserver {
 }
 
 var (
-	HTTPRequestCount   = NewCounterVec("nicovideo_rss_http_requests_total", "Total HTTP requests by endpoint and status code", "endpoint", "status")
-	HTMLParseCount     = NewCounterVec("nicovideo_rss_html_parse_total", "Total number of HTML parses by status", "status")
-	NicoRequestCount   = NewCounterVec("nicovideo_rss_nico_requests_total", "Total number of requests to Nicovideo by status code", "status")
-	NicoRetryCount     = &Counter{}
-	CacheHitCount      = NewCounterVec("nicovideo_rss_cache_hits_total", "Total number of cache hits and misses", "status")
-	FeedUpdateCount    = NewCounterVec("nicovideo_rss_feed_updates_total", "Total number of feed updates by feed name and status", "feed", "status")
-	FeedUpdateDuration = NewHistogramVec("nicovideo_rss_feed_update_duration_seconds", "Duration of feed updates in seconds", "feed")
+	HTTPRequestCount        = NewCounterVec("nicovideo_rss_http_requests_total", "Total HTTP requests by endpoint and status code", "endpoint", "status")
+	HTMLParseCount          = NewCounterVec("nicovideo_rss_html_parse_total", "Total number of HTML parses by status", "status")
+	NicoRequestCount        = NewCounterVec("nicovideo_rss_nico_requests_total", "Total number of requests to Nicovideo by status code", "status")
+	NicoRetryCount          = &Counter{}
+	CacheHitCount           = NewCounterVec("nicovideo_rss_cache_hits_total", "Total number of cache hits and misses", "status")
+	FeedUpdateCount         = NewCounterVec("nicovideo_rss_feed_updates_total", "Total number of feed updates by feed name and status", "feed", "status")
+	FeedUpdateDuration      = NewHistogramVec("nicovideo_rss_feed_update_duration_seconds", "Duration of feed updates in seconds", "feed")
+	FeedLastUpdateTimestamp = NewGaugeVec("nicovideo_rss_feed_last_update_timestamp_seconds", "Timestamp of the last feed update in seconds since epoch", "feed")
 )
 
 // WritePrometheusFormat writes all metrics in Prometheus text format
@@ -111,6 +160,7 @@ func WritePrometheusFormat(w io.Writer) {
 	writeCounterVec(w, CacheHitCount)
 	writeCounterVec(w, FeedUpdateCount)
 	writeHistogramVec(w, FeedUpdateDuration)
+	writeGaugeVec(w, FeedLastUpdateTimestamp)
 }
 
 func writeCounter(w io.Writer, name, help string, val uint64) {
@@ -160,4 +210,20 @@ func formatLabels(names, values []string) string {
 		}
 	}
 	return strings.Join(parts, ",")
+}
+
+func writeGaugeVec(w io.Writer, gv *GaugeVec) {
+	gv.mu.RLock()
+	defer gv.mu.RUnlock()
+	if len(gv.gauges) == 0 {
+		return
+	}
+	fmt.Fprintf(w, "# HELP %s %s\n", gv.name, gv.help)
+	fmt.Fprintf(w, "# TYPE %s gauge\n", gv.name)
+
+	for key, g := range gv.gauges {
+		lvs := strings.Split(key, ",")
+		labelStr := formatLabels(gv.labels, lvs)
+		fmt.Fprintf(w, "%s{%s} %d\n", gv.name, labelStr, g.Get())
+	}
 }
