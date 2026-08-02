@@ -527,6 +527,7 @@ func TestFetchPage_InvalidURL(t *testing.T) {
 	fetcher := NewHTMLFetcher()
 
 	// Use nil context to trigger http.NewRequestWithContext error
+	//lint:ignore SA1012 intentional nil context for testing error path
 	_, err := fetcher.fetchPage(nil, "tag", "sort", 1)
 	if err == nil {
 		t.Error("expected error with nil context, got nil")
